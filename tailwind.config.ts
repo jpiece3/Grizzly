@@ -83,7 +83,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["var(--font-sans)"],
+        sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "Segoe UI", "var(--font-sans)", "sans-serif"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
       },
