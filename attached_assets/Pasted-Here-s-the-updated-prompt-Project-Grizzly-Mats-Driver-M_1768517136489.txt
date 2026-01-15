@@ -1,0 +1,103 @@
+Here's the updated prompt:
+
+***
+
+**Project: Grizzly Mats Driver Management App**
+
+Build a simple, mobile-friendly web application for managing mat delivery driver schedules, GPS-verified time tracking, and route optimization.
+
+## Core Features
+
+**1. Route Assignment & Optimization**
+- Admin uploads CSV file with delivery locations (columns: address, customer_name, service_type, notes)
+- Admin selects number of available drivers for the day
+- System automatically divides locations among drivers and uses Google Maps Route Optimization API to generate optimal routes for each driver
+- Display all driver routes in a clear overview with stop counts and estimated times
+- Allow easy manual adjustments: drag-and-drop stops between drivers, reorder stops within a route, add/remove locations
+- Re-optimize button to recalculate routes after manual changes
+- Each route generates a clickable Google Maps link with all stops in optimized order
+
+**2. Driver Schedule Distribution**
+- Once routes are finalized, assign each route to a specific driver by name
+- Drivers can view their assigned schedule for the day on mobile
+- Display route as numbered list of stops with addresses and customer info
+- Prominent "Open Route in Google Maps" button at top
+
+**3. GPS-Verified Clock In/Out**
+- Mobile interface with two large buttons: "Clock In" and "Clock Out"
+- Verify driver's GPS coordinates match work location (geofencing with 100-meter radius)
+- Block clock in/out if location doesn't match
+- Store timestamp, GPS coordinates, and location name for each clock action
+- Show current status: "Clocked In" or "Clocked Out"
+
+**4. Data Export**
+- Export time tracking data to CSV with columns: Driver Name, Date, Clock In Time, Clock In Location, Clock Out Time, Clock Out Location, Total Hours, GPS Coordinates
+- Export route assignments with all stops, sequence, and driver assignments
+
+## Technical Requirements
+
+**Backend:**
+- Simple REST API (Node.js/Express or Python/Flask)
+- PostgreSQL or SQLite database
+- Google Maps Route Optimization API integration for multi-route optimization (supports optimizing routes for multiple vehicles)
+- CSV file parsing and validation
+- Geolocation verification logic
+- Route balancing algorithm to distribute stops evenly among drivers
+
+**Frontend:**
+- Clean, minimal mobile-first design
+- Admin dashboard for desktop/tablet with drag-and-drop functionality
+- Mobile driver view optimized for phones
+- Large, touch-friendly buttons
+- Responsive layout
+- Real-time location access via browser Geolocation API
+
+**Database Schema:**
+- Users table (driver_id, name, phone, role)
+- Locations table (location_id, address, customer_name, service_type, notes, lat, lng)
+- Routes table (route_id, date, driver_id, stops_json, route_link, total_distance, estimated_time)
+- TimeEntries table (entry_id, driver_id, clock_in_time, clock_in_lat, clock_in_lng, clock_out_time, clock_out_lat, clock_out_lng)
+
+## Design Style
+- White background, clean sans-serif font
+- Minimal UI with large buttons and clear labels
+- Green for "Clock In", red for "Clock Out"
+- Blue for route links and actions
+- Simple card-based layout for route overview
+- Drag handles and visual feedback for route adjustments
+- No unnecessary animations or graphics
+
+## User Flow
+
+**Admin:**
+1. Log in to dashboard
+2. Upload CSV of delivery locations for the day
+3. Select number of drivers (2-10)
+4. Click "Generate Routes" - system divides locations and optimizes routes for each driver
+5. Review route assignments - see map preview and stop list for each driver
+6. Make manual adjustments if needed: drag stops between drivers, reorder sequence
+7. Click "Re-optimize" if adjustments made
+8. Assign each route to specific driver by name
+9. Finalize and publish schedules
+
+**Driver:**
+1. Open app on phone
+2. View today's schedule with numbered stop list
+3. Click "Open Route in Google Maps" to launch navigation
+4. Arrive at work location, click "Clock In" (GPS verified)
+5. Complete deliveries following the route
+6. Return to depot and click "Clock Out" (GPS verified)
+7. Admin can export timesheet data
+
+## Route Optimization Logic
+- Use Google Maps Route Optimization API to handle multi-vehicle routing
+- Balance total stops across drivers (e.g., 20 locations ÷ 4 drivers = 5 stops each)
+- Consider geographic clustering to minimize total travel time
+- Set depot/start location as return point for all routes
+- Optimize for time efficiency while keeping routes balanced
+
+Build this as a simple, functional MVP focused on reliability, flexibility, and ease of use for both admin route planning and drivers in the field.
+
+***
+
+This version emphasizes the CSV upload workflow, automatic route distribution across multiple drivers, and easy manual adjustment capabilities.
