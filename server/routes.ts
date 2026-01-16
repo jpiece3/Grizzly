@@ -53,6 +53,20 @@ const moveStopSchema = z.object({
   newSequence: z.number().int().min(1, "Sequence must be at least 1"),
 });
 
+const routeConfirmationSchema = z.object({
+  scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+  locationId: z.string().min(1, "Location ID is required"),
+  excluded: z.boolean(),
+});
+
+const bulkRouteConfirmationSchema = z.object({
+  scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+  confirmations: z.array(z.object({
+    locationId: z.string().min(1, "Location ID is required"),
+    excluded: z.boolean(),
+  })),
+});
+
 // Helper function to calculate distance between two coordinates using Haversine formula
 function calculateHaversineDistance(
   lat1: number,
@@ -857,9 +871,20 @@ export async function registerRoutes(
 
       if (targetDay && scheduledDate) {
         // Generate routes for a specific date
-        const dayLocations = allLocations.filter(loc => loc.daysOfWeek && loc.daysOfWeek.includes(targetDay));
+        let dayLocations = allLocations.filter(loc => loc.daysOfWeek && loc.daysOfWeek.includes(targetDay));
         if (dayLocations.length === 0) {
           return res.status(400).json({ message: `No locations are scheduled for ${dayOfWeek}. Assign days to delivery stops first.` });
+        }
+        
+        // Filter out any locations that are excluded for this specific date
+        const excludedLocationIds = await storage.getExcludedLocationIdsByDate(scheduledDate);
+        if (excludedLocationIds.length > 0) {
+          dayLocations = dayLocations.filter(loc => !excludedLocationIds.includes(loc.id));
+          console.log(`Excluding ${excludedLocationIds.length} locations for date ${scheduledDate}`);
+        }
+
+        if (dayLocations.length === 0) {
+          return res.status(400).json({ message: `All locations for ${dayOfWeek} are excluded for this date.` });
         }
         
         // Clear existing routes for this specific date
@@ -1377,6 +1402,92 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete work location error:", error);
       return res.status(500).json({ message: "Failed to delete work location" });
+    }
+  });
+
+  // ============ ROUTE CONFIRMATION ROUTES ============
+  
+  // Get confirmations for a specific date
+  app.get("/api/route-confirmations", async (req: Request, res: Response) => {
+    try {
+      const { date } = req.query;
+      if (!date || typeof date !== "string") {
+        return res.status(400).json({ message: "Date parameter is required" });
+      }
+      const confirmations = await storage.getRouteConfirmationsByDate(date);
+      return res.json(confirmations);
+    } catch (error) {
+      console.error("Get route confirmations error:", error);
+      return res.status(500).json({ message: "Failed to fetch route confirmations" });
+    }
+  });
+
+  // Save/update a confirmation for a specific location and date
+  app.post("/api/route-confirmations", async (req: Request, res: Response) => {
+    try {
+      const parseResult = routeConfirmationSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          message: parseResult.error.errors[0]?.message || "Invalid request body"
+        });
+      }
+
+      const { scheduledDate, locationId, excluded } = parseResult.data;
+
+      const confirmation = await storage.upsertRouteConfirmation({
+        scheduledDate,
+        locationId,
+        excluded,
+      });
+
+      return res.status(201).json(confirmation);
+    } catch (error) {
+      console.error("Save route confirmation error:", error);
+      return res.status(500).json({ message: "Failed to save route confirmation" });
+    }
+  });
+
+  // Bulk save confirmations for a date
+  app.post("/api/route-confirmations/bulk", async (req: Request, res: Response) => {
+    try {
+      const parseResult = bulkRouteConfirmationSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          message: parseResult.error.errors[0]?.message || "Invalid request body"
+        });
+      }
+
+      const { scheduledDate, confirmations } = parseResult.data;
+
+      const results = await Promise.all(
+        confirmations.map((c) =>
+          storage.upsertRouteConfirmation({
+            scheduledDate,
+            locationId: c.locationId,
+            excluded: c.excluded,
+          })
+        )
+      );
+
+      return res.status(201).json(results);
+    } catch (error) {
+      console.error("Bulk save route confirmations error:", error);
+      return res.status(500).json({ message: "Failed to save route confirmations" });
+    }
+  });
+
+  // Delete confirmations for a specific date
+  app.delete("/api/route-confirmations", async (req: Request, res: Response) => {
+    try {
+      const { date } = req.query;
+      if (!date || typeof date !== "string") {
+        return res.status(400).json({ message: "Date parameter is required" });
+      }
+      await storage.deleteRouteConfirmationsByDate(date);
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Delete route confirmations error:", error);
+      return res.status(500).json({ message: "Failed to delete route confirmations" });
     }
   });
 

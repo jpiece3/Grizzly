@@ -66,6 +66,15 @@ export const workLocations = pgTable("work_locations", {
   radiusMeters: integer("radius_meters").notNull().default(100),
 });
 
+// Route confirmations - tracks date-specific stop inclusions/exclusions
+export const routeConfirmations = pgTable("route_confirmations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  scheduledDate: date("scheduled_date").notNull(),
+  locationId: varchar("location_id").notNull().references(() => locations.id, { onDelete: "cascade" }),
+  excluded: boolean("excluded").notNull().default(false),
+  confirmedAt: timestamp("confirmed_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   routes: many(routes),
@@ -83,6 +92,13 @@ export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
   driver: one(users, {
     fields: [timeEntries.driverId],
     references: [users.id],
+  }),
+}));
+
+export const routeConfirmationsRelations = relations(routeConfirmations, ({ one }) => ({
+  location: one(locations, {
+    fields: [routeConfirmations.locationId],
+    references: [locations.id],
   }),
 }));
 
@@ -115,6 +131,7 @@ export const insertLocationSchema = createInsertSchema(locations).omit({ id: tru
 export const insertRouteSchema = createInsertSchema(routes).omit({ id: true });
 export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({ id: true });
 export const insertWorkLocationSchema = createInsertSchema(workLocations).omit({ id: true });
+export const insertRouteConfirmationSchema = createInsertSchema(routeConfirmations).omit({ id: true });
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -131,6 +148,9 @@ export type TimeEntry = typeof timeEntries.$inferSelect;
 
 export type InsertWorkLocation = z.infer<typeof insertWorkLocationSchema>;
 export type WorkLocation = typeof workLocations.$inferSelect;
+
+export type InsertRouteConfirmation = z.infer<typeof insertRouteConfirmationSchema>;
+export type RouteConfirmation = typeof routeConfirmations.$inferSelect;
 
 // API response types
 export interface RouteWithDriver extends Route {

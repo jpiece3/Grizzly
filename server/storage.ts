@@ -4,6 +4,7 @@ import {
   routes,
   timeEntries,
   workLocations,
+  routeConfirmations,
   type User,
   type InsertUser,
   type Location,
@@ -14,6 +15,8 @@ import {
   type InsertTimeEntry,
   type WorkLocation,
   type InsertWorkLocation,
+  type RouteConfirmation,
+  type InsertRouteConfirmation,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
@@ -58,6 +61,12 @@ export interface IStorage {
   getAllWorkLocations(): Promise<WorkLocation[]>;
   createWorkLocation(location: InsertWorkLocation): Promise<WorkLocation>;
   deleteWorkLocation(id: string): Promise<void>;
+
+  // Route Confirmations
+  getRouteConfirmationsByDate(scheduledDate: string): Promise<RouteConfirmation[]>;
+  upsertRouteConfirmation(confirmation: InsertRouteConfirmation): Promise<RouteConfirmation>;
+  deleteRouteConfirmationsByDate(scheduledDate: string): Promise<void>;
+  getExcludedLocationIdsByDate(scheduledDate: string): Promise<string[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -203,6 +212,44 @@ export class DatabaseStorage implements IStorage {
 
   async deleteWorkLocation(id: string): Promise<void> {
     await db.delete(workLocations).where(eq(workLocations.id, id));
+  }
+
+  // Route Confirmations
+  async getRouteConfirmationsByDate(scheduledDate: string): Promise<RouteConfirmation[]> {
+    return db.select().from(routeConfirmations).where(eq(routeConfirmations.scheduledDate, scheduledDate));
+  }
+
+  async upsertRouteConfirmation(confirmation: InsertRouteConfirmation): Promise<RouteConfirmation> {
+    const existing = await db.select().from(routeConfirmations)
+      .where(and(
+        eq(routeConfirmations.scheduledDate, confirmation.scheduledDate),
+        eq(routeConfirmations.locationId, confirmation.locationId)
+      ));
+    
+    if (existing.length > 0) {
+      const [updated] = await db.update(routeConfirmations)
+        .set({ excluded: confirmation.excluded, confirmedAt: new Date() })
+        .where(eq(routeConfirmations.id, existing[0].id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(routeConfirmations).values(confirmation).returning();
+      return created;
+    }
+  }
+
+  async deleteRouteConfirmationsByDate(scheduledDate: string): Promise<void> {
+    await db.delete(routeConfirmations).where(eq(routeConfirmations.scheduledDate, scheduledDate));
+  }
+
+  async getExcludedLocationIdsByDate(scheduledDate: string): Promise<string[]> {
+    const excluded = await db.select({ locationId: routeConfirmations.locationId })
+      .from(routeConfirmations)
+      .where(and(
+        eq(routeConfirmations.scheduledDate, scheduledDate),
+        eq(routeConfirmations.excluded, true)
+      ));
+    return excluded.map(e => e.locationId);
   }
 }
 

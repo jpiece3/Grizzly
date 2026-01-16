@@ -12,6 +12,7 @@ import AdminCalendarPage from "@/pages/admin/calendar";
 import AdminDriversPage from "@/pages/admin/drivers";
 import AdminTimeTrackingPage from "@/pages/admin/time-tracking";
 import AdminLocationsPage from "@/pages/admin/locations";
+import AdminConfirmRoutePage from "@/pages/admin/confirm-route";
 import DriverPage from "@/pages/driver/index";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 
@@ -119,6 +120,12 @@ function Router() {
       <Route path="/admin/locations">
         <ProtectedRoute requiredRole="admin">
           <AdminLocationsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/confirm-route">
+        <ProtectedRoute requiredRole="admin">
+          <AdminConfirmRoutePage />
         </ProtectedRoute>
       </Route>
 

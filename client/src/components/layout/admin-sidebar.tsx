@@ -1,11 +1,12 @@
 import { Link, useLocation } from "wouter";
-import { Map, Users, Clock, MapPin, LogOut, Package, Calendar } from "lucide-react";
+import { Map, Users, Clock, MapPin, LogOut, Package, Calendar, ClipboardCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthContext } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { id: "stops", label: "Delivery Stops", Icon: Package, href: "/admin/stops" },
+  { id: "confirm-route", label: "Confirm Route", Icon: ClipboardCheck, href: "/admin/confirm-route" },
   { id: "routes", label: "Routes", Icon: Map, href: "/admin" },
   { id: "calendar", label: "Calendar", Icon: Calendar, href: "/admin/calendar" },
   { id: "drivers", label: "Drivers", Icon: Users, href: "/admin/drivers" },
