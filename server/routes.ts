@@ -175,6 +175,195 @@ function calculateRouteDistance(stops: RouteStop[]): number | null {
   return Math.round((totalMeters / 1000) * 10) / 10;
 }
 
+// Geocode an address using Google Maps Geocoding API
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  
+  if (!apiKey) {
+    console.log("Geocoding skipped: GOOGLE_MAPS_API_KEY not configured");
+    return null;
+  }
+
+  try {
+    const encodedAddress = encodeURIComponent(address);
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === "OK" && data.results && data.results.length > 0) {
+      const location = data.results[0].geometry.location;
+      console.log(`Geocoded "${address}" -> lat: ${location.lat}, lng: ${location.lng}`);
+      return { lat: location.lat, lng: location.lng };
+    } else {
+      console.log(`Geocoding failed for "${address}": ${data.status}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Geocoding error for "${address}":`, error);
+    return null;
+  }
+}
+
+// Helper to add delay between operations
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Google Routes API response type
+interface GoogleRoutesOptimizationResult {
+  optimizedStops: RouteStop[];
+  totalDistanceKm: number;
+}
+
+// Optimize route using Google Routes API with waypoint optimization
+async function optimizeRouteWithGoogle(
+  stops: RouteStop[]
+): Promise<GoogleRoutesOptimizationResult | null> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+  if (!apiKey) {
+    console.log("Google route optimization skipped: GOOGLE_MAPS_API_KEY not configured");
+    return null;
+  }
+
+  // Need at least 2 stops to optimize
+  if (stops.length < 2) {
+    console.log("Google route optimization skipped: Less than 2 stops");
+    return null;
+  }
+
+  // All stops must have coordinates
+  const stopsWithCoords = stops.filter(s => s.lat != null && s.lng != null);
+  if (stopsWithCoords.length !== stops.length) {
+    console.log("Google route optimization skipped: Some stops lack coordinates");
+    return null;
+  }
+
+  try {
+    // Use first stop as origin and last stop as destination
+    const origin = stops[0];
+    const destination = stops[stops.length - 1];
+    const intermediates = stops.slice(1, -1);
+
+    const requestBody: any = {
+      origin: {
+        location: {
+          latLng: { latitude: origin.lat, longitude: origin.lng }
+        }
+      },
+      destination: {
+        location: {
+          latLng: { latitude: destination.lat, longitude: destination.lng }
+        }
+      },
+      travelMode: "DRIVE",
+      optimizeWaypointOrder: intermediates.length > 0,
+    };
+
+    // Only add intermediates if there are any
+    if (intermediates.length > 0) {
+      requestBody.intermediates = intermediates.map(stop => ({
+        location: {
+          latLng: { latitude: stop.lat, longitude: stop.lng }
+        }
+      }));
+    }
+
+    console.log(`Calling Google Routes API with ${stops.length} stops (${intermediates.length} intermediates)...`);
+
+    const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "routes.distanceMeters,routes.optimizedIntermediateWaypointIndex"
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Google Routes API error:", JSON.stringify(data, null, 2));
+      return null;
+    }
+
+    console.log("Google Routes API response:", JSON.stringify(data, null, 2));
+
+    if (!data.routes || data.routes.length === 0) {
+      console.log("Google Routes API returned no routes");
+      return null;
+    }
+
+    const route = data.routes[0];
+    const distanceMeters = route.distanceMeters || 0;
+    const totalDistanceKm = Math.round((distanceMeters / 1000) * 10) / 10;
+
+    // Reorder stops based on optimized waypoint indices
+    let optimizedStops: RouteStop[];
+
+    if (intermediates.length > 0 && route.optimizedIntermediateWaypointIndex) {
+      // Build optimized order: origin + reordered intermediates + destination
+      const optimizedIntermediates = route.optimizedIntermediateWaypointIndex.map(
+        (idx: number) => intermediates[idx]
+      );
+      optimizedStops = [origin, ...optimizedIntermediates, destination];
+    } else {
+      // No intermediates or no optimization data - keep original order
+      optimizedStops = [...stops];
+    }
+
+    // Update sequence numbers
+    optimizedStops = optimizedStops.map((stop, index) => ({
+      ...stop,
+      sequence: index + 1
+    }));
+
+    console.log(`Google route optimization complete: ${totalDistanceKm}km total distance`);
+    return { optimizedStops, totalDistanceKm };
+
+  } catch (error) {
+    console.error("Google Routes API error:", error);
+    return null;
+  }
+}
+
+// Process geocoding in batches to respect rate limits
+async function geocodeBatch(
+  locations: InsertLocation[],
+  batchSize: number = 5,
+  delayMs: number = 200
+): Promise<InsertLocation[]> {
+  const results: InsertLocation[] = [];
+  
+  for (let i = 0; i < locations.length; i += batchSize) {
+    const batch = locations.slice(i, i + batchSize);
+    
+    const geocodedBatch = await Promise.all(
+      batch.map(async (loc) => {
+        if (Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) {
+          return loc;
+        }
+        
+        const coords = await geocodeAddress(loc.address);
+        if (coords) {
+          return { ...loc, lat: coords.lat, lng: coords.lng };
+        }
+        return loc;
+      })
+    );
+    
+    results.push(...geocodedBatch);
+    
+    if (i + batchSize < locations.length) {
+      await delay(delayMs);
+    }
+  }
+  
+  return results;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -307,20 +496,33 @@ export async function registerRoutes(
       }
 
       // Parse and create locations
-      const locationsToCreate: InsertLocation[] = records.map((row: any) => ({
-        address: row.address || row.Address || "",
-        customerName: row.customer_name || row.customerName || row["Customer Name"] || "",
-        serviceType: row.service_type || row.serviceType || row["Service Type"] || null,
-        notes: row.notes || row.Notes || null,
-        lat: row.lat ? parseFloat(row.lat) : null,
-        lng: row.lng ? parseFloat(row.lng) : null,
-        uploadDate: format(new Date(), "yyyy-MM-dd"),
-      }));
+      const locationsToCreate: InsertLocation[] = records.map((row: any) => {
+        const parseLat = row.lat ? parseFloat(row.lat) : null;
+        const parseLng = row.lng ? parseFloat(row.lng) : null;
+        return {
+          address: row.address || row.Address || "",
+          customerName: row.customer_name || row.customerName || row["Customer Name"] || "",
+          serviceType: row.service_type || row.serviceType || row["Service Type"] || null,
+          notes: row.notes || row.Notes || null,
+          lat: Number.isFinite(parseLat) ? parseLat : null,
+          lng: Number.isFinite(parseLng) ? parseLng : null,
+          uploadDate: format(new Date(), "yyyy-MM-dd"),
+        };
+      });
+
+      // Geocode addresses that don't have lat/lng (in batches to respect rate limits)
+      const locationsNeedingGeocoding = locationsToCreate.filter(loc => loc.lat == null || loc.lng == null);
+      console.log(`Geocoding ${locationsNeedingGeocoding.length} of ${locationsToCreate.length} locations`);
+      
+      const geocodedLocations = await geocodeBatch(locationsToCreate, 5, 200);
+      
+      const geocodedCount = geocodedLocations.filter(loc => loc.lat != null && loc.lng != null).length;
+      console.log(`Geocoding complete: ${geocodedCount} locations have coordinates`);
 
       // Clear existing locations and add new ones
       await storage.clearLocations();
       await storage.clearRoutes();
-      const createdLocations = await storage.createLocations(locationsToCreate);
+      const createdLocations = await storage.createLocations(geocodedLocations);
 
       return res.status(201).json({
         message: `Uploaded ${createdLocations.length} locations`,
@@ -385,7 +587,7 @@ export async function registerRoutes(
           const orderedLocations = nearestNeighborOrdering(cluster);
 
           // Create route stops with optimized sequence
-          const stops: RouteStop[] = orderedLocations.map((loc, index) => ({
+          let stops: RouteStop[] = orderedLocations.map((loc, index) => ({
             id: randomUUID(),
             locationId: loc.id,
             address: loc.address,
@@ -397,8 +599,20 @@ export async function registerRoutes(
             sequence: index + 1,
           }));
 
-          // Calculate total distance between consecutive stops (in kilometers)
-          const totalDistance = calculateRouteDistance(stops);
+          // Try Google Routes API optimization for better results
+          let totalDistance: number | null = null;
+          const googleResult = await optimizeRouteWithGoogle(stops);
+          
+          if (googleResult) {
+            // Use Google's optimized order and real driving distance
+            stops = googleResult.optimizedStops;
+            totalDistance = googleResult.totalDistanceKm;
+            console.log(`Route optimized with Google: ${stops.length} stops, ${totalDistance}km`);
+          } else {
+            // Fall back to Haversine distance calculation
+            totalDistance = calculateRouteDistance(stops);
+            console.log(`Route using nearest-neighbor: ${stops.length} stops, ${totalDistance}km (Haversine)`);
+          }
 
           // Generate Google Maps URL with all stops
           const mapsUrl = generateGoogleMapsUrl(stops);
@@ -433,7 +647,7 @@ export async function registerRoutes(
           const routeLocations = locations.slice(startIndex, endIndex);
           
           // Create route stops from locations
-          const stops: RouteStop[] = routeLocations.map((loc, index) => ({
+          let stops: RouteStop[] = routeLocations.map((loc, index) => ({
             id: randomUUID(),
             locationId: loc.id,
             address: loc.address,
@@ -445,6 +659,23 @@ export async function registerRoutes(
             sequence: index + 1,
           }));
 
+          // Try Google Routes API optimization if stops have coordinates
+          let totalDistance: number | null = null;
+          const stopsHaveCoords = stops.every(s => s.lat != null && s.lng != null);
+          
+          if (stopsHaveCoords) {
+            const googleResult = await optimizeRouteWithGoogle(stops);
+            if (googleResult) {
+              stops = googleResult.optimizedStops;
+              totalDistance = googleResult.totalDistanceKm;
+              console.log(`Route optimized with Google: ${stops.length} stops, ${totalDistance}km`);
+            } else {
+              // Fall back to Haversine distance calculation
+              totalDistance = calculateRouteDistance(stops);
+              console.log(`Route using round-robin: ${stops.length} stops, ${totalDistance}km (Haversine)`);
+            }
+          }
+
           // Generate Google Maps URL with all stops
           const mapsUrl = generateGoogleMapsUrl(stops);
 
@@ -455,7 +686,7 @@ export async function registerRoutes(
             date: format(new Date(), "yyyy-MM-dd"),
             stopsJson: stops,
             routeLink: mapsUrl,
-            totalDistance: null,
+            totalDistance,
             estimatedTime,
             status: "draft",
             stopCount: stops.length,
