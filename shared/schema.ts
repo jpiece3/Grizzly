@@ -23,6 +23,7 @@ export const locations = pgTable("locations", {
   lat: real("lat"),
   lng: real("lng"),
   uploadDate: date("upload_date").notNull().default(sql`CURRENT_DATE`),
+  daysOfWeek: text("days_of_week").array(), // ['monday', 'tuesday', etc.]
 });
 
 // Routes table (assigned routes for drivers)

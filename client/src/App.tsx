@@ -6,7 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuthContext } from "@/context/auth-context";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
+import AdminStopsPage from "@/pages/admin/stops";
 import AdminRoutesPage from "@/pages/admin/routes";
+import AdminCalendarPage from "@/pages/admin/calendar";
 import AdminDriversPage from "@/pages/admin/drivers";
 import AdminTimeTrackingPage from "@/pages/admin/time-tracking";
 import AdminLocationsPage from "@/pages/admin/locations";
@@ -99,6 +101,18 @@ function Router() {
       <Route path="/admin/time-tracking">
         <ProtectedRoute requiredRole="admin">
           <AdminTimeTrackingPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/stops">
+        <ProtectedRoute requiredRole="admin">
+          <AdminStopsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/calendar">
+        <ProtectedRoute requiredRole="admin">
+          <AdminCalendarPage />
         </ProtectedRoute>
       </Route>
 

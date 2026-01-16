@@ -493,6 +493,32 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/locations/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { daysOfWeek } = req.body;
+
+      const location = await storage.updateLocation(id, {
+        daysOfWeek: daysOfWeek || null,
+      });
+
+      return res.json(location);
+    } catch (error) {
+      console.error("Update location error:", error);
+      return res.status(500).json({ message: "Failed to update location" });
+    }
+  });
+
+  app.delete("/api/locations/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteLocation(req.params.id);
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Delete location error:", error);
+      return res.status(500).json({ message: "Failed to delete location" });
+    }
+  });
+
   app.post("/api/locations/upload", upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
