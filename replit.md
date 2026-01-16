@@ -34,6 +34,8 @@ UI preferences persist across navigation using localStorage:
 - `routes` - Assigned routes with stops in JSON format
 - `time_entries` - Clock in/out records with GPS coordinates
 - `work_locations` - Geofenced locations for GPS verification
+- `materials` - Inventory of materials/services (mats, supplies, etc.)
+- `location_materials` - Junction table linking materials to locations with quantity and day-specific support
 
 ## Key Features
 
@@ -80,6 +82,17 @@ UI preferences persist across navigation using localStorage:
 7. **Work Locations**
    - Configure geofenced locations with auto-geocoding from address
    - Set GPS verification radius (default 100m)
+
+8. **Materials Management**
+   - Add, edit, delete materials/services inventory
+   - Organize materials by category
+   - Assign materials to locations via customer detail dialog
+   - View materials required at each delivery stop
+
+9. **Customer Detail Dialog**
+   - Click on customer name to open detail dialog
+   - View location info, scheduled days, and assigned materials
+   - Admin can assign/remove materials from the dialog
 
 ### Driver Mobile View
 1. **Schedule**
@@ -137,6 +150,17 @@ UI preferences persist across navigation using localStorage:
 - `POST /api/work-locations` - Create work location
 - `DELETE /api/work-locations/:id` - Delete work location
 
+### Materials
+- `GET /api/materials` - Get all materials
+- `POST /api/materials` - Create a material
+- `PATCH /api/materials/:id` - Update a material
+- `DELETE /api/materials/:id` - Delete a material
+
+### Location Materials
+- `GET /api/locations/:locationId/materials` - Get materials for a location
+- `POST /api/locations/:locationId/materials` - Assign material to location (body: { materialId, quantity?, daysOfWeek? })
+- `DELETE /api/location-materials/:id` - Remove material assignment
+
 ## CSV Upload Format
 Required columns:
 - `address` - Delivery address
@@ -145,6 +169,7 @@ Required columns:
 Optional columns:
 - `service_type` - Type of service
 - `notes` - Additional notes
+- `materials` - Comma-separated list of materials (e.g., "Logo Mat, Anti-Fatigue Mat, Paper Towels"). Materials are auto-created if they don't exist.
 
 ## Running the Project
 ```bash
