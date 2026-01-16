@@ -1540,14 +1540,57 @@ export async function registerRoutes(
       const assignedRoutes = routes.filter(r => r.status === "assigned");
       const draftRoutes = routes.filter(r => r.status === "draft");
 
-      // Get today's day of week
+      // Get today's date info
+      const today = new Date();
+      const todayFormatted = format(today, "yyyy-MM-dd");
       const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-      const todayDayOfWeek = days[new Date().getDay()];
+      const todayDayOfWeek = days[today.getDay()];
 
       // Calculate some stats
-      const todaysRoutes = routes.filter(r => r.dayOfWeek === todayDayOfWeek);
+      // Filter routes by today's date (more accurate than dayOfWeek)
+      const todaysRoutes = routes.filter(r => r.date === todayFormatted);
       const scheduledLocations = locations.filter(l => l.daysOfWeek && l.daysOfWeek.length > 0);
       const unscheduledLocations = locations.filter(l => !l.daysOfWeek || l.daysOfWeek.length === 0);
+      
+      // Helper function to generate Google Maps directions URL
+      const generateGoogleMapsLink = (stops: RouteStop[]) => {
+        if (!stops || stops.length === 0) return "No stops";
+        
+        // Warehouse as origin and destination
+        const warehouse = "583 Frederick Road, Catonsville, MD 21228";
+        const origin = encodeURIComponent(warehouse);
+        const destination = encodeURIComponent(warehouse);
+        
+        // Stops as waypoints
+        const waypoints = stops
+          .sort((a, b) => a.sequence - b.sequence)
+          .map(s => encodeURIComponent(s.address))
+          .join("|");
+        
+        return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+      };
+      
+      // Build detailed route information for today
+      const todaysRoutesDetailed = todaysRoutes.map(r => {
+        const driver = users.find(u => u.id === r.driverId);
+        const stops = (r.stopsJson as RouteStop[]) || [];
+        const sortedStops = [...stops].sort((a, b) => a.sequence - b.sequence);
+        const mapsLink = generateGoogleMapsLink(stops);
+        
+        return {
+          routeId: r.id,
+          driverName: driver?.name || "Unassigned",
+          status: r.status,
+          stopCount: sortedStops.length,
+          stops: sortedStops.map(s => ({
+            sequence: s.sequence,
+            customerName: s.customerName,
+            address: s.address,
+            serviceType: s.serviceType || "N/A"
+          })),
+          googleMapsLink: mapsLink
+        };
+      });
 
       // Build data summary for the AI
       const dataSummary = `
@@ -1574,11 +1617,14 @@ ${["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 - Draft routes: ${draftRoutes.length}
 - Today's routes (${todayDayOfWeek}): ${todaysRoutes.length}
 
-### Today's Schedule
-${todaysRoutes.length > 0 ? todaysRoutes.map(r => {
-  const driver = users.find(u => u.id === r.driverId);
-  const stopCount = r.stopCount || (r.stopsJson as RouteStop[])?.length || 0;
-  return `- Route ${r.id.slice(0, 8)}: ${driver?.name || "Unassigned"} - ${stopCount} stops (${r.status})`;
+### Today's Schedule (${todayFormatted} - ${todayDayOfWeek.charAt(0).toUpperCase() + todayDayOfWeek.slice(1)})
+${todaysRoutesDetailed.length > 0 ? todaysRoutesDetailed.map(r => {
+  const stopsDetail = r.stops.map(s => `  ${s.sequence}. ${s.customerName} - ${s.address}`).join("\n");
+  return `
+**${r.driverName}'s Route** (${r.status}) - ${r.stopCount} stops
+${stopsDetail}
+Google Maps Link: ${r.googleMapsLink}
+`;
 }).join("\n") : "No routes scheduled for today"}
 
 ### Work Locations
@@ -1596,13 +1642,17 @@ ${workLocations.map(wl => `- ${wl.name}: ${wl.address} (radius: ${wl.radiusMeter
 2. Provide data insights and summaries from the current app state
 3. Help troubleshoot common issues
 4. Give recommendations for route management and scheduling
+5. Provide detailed route information including all stops and Google Maps links for navigation
 
 ## Guidelines:
 - Be concise but helpful
 - Reference specific features and steps when explaining how to do things
 - Use the actual data when answering questions about routes, drivers, or schedules
+- When asked about routes, list the driver name, number of stops, and each stop with its sequence number, customer name, and address
+- When asked for Google Maps links, provide the full clickable link from the data (they start and end at the warehouse)
 - If you don't know something, admit it and suggest where they might find the answer
 - Format responses with markdown for readability
+- Make links clickable by using proper markdown format: [Link Text](URL)
 
 ## App Documentation:
 ${helpContent}
