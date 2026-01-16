@@ -30,6 +30,27 @@ const clockOutSchema = z.object({
   locationName: z.string().optional(),
 });
 
+const updateStopsSchema = z.object({
+  stops: z.array(z.object({
+    id: z.string(),
+    locationId: z.string(),
+    address: z.string(),
+    customerName: z.string(),
+    serviceType: z.string().optional(),
+    notes: z.string().optional(),
+    lat: z.number().optional(),
+    lng: z.number().optional(),
+    sequence: z.number(),
+  })),
+});
+
+const moveStopSchema = z.object({
+  stopId: z.string().min(1, "Stop ID is required"),
+  fromRouteId: z.string().min(1, "From route ID is required"),
+  toRouteId: z.string().min(1, "To route ID is required"),
+  newSequence: z.number().int().min(1, "Sequence must be at least 1"),
+});
+
 // Helper function to calculate distance between two coordinates using Haversine formula
 function calculateHaversineDistance(
   lat1: number,
@@ -734,6 +755,105 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/routes/:id/stops", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const validation = updateStopsSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        const errors = validation.error.flatten();
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.fieldErrors,
+        });
+      }
+
+      const { stops } = validation.data;
+
+      const route = await storage.getRoute(id);
+      if (!route) {
+        return res.status(404).json({ message: "Route not found" });
+      }
+
+      const updatedRoute = await storage.updateRoute(id, {
+        stopsJson: stops,
+        stopCount: stops.length,
+      });
+
+      return res.json(updatedRoute);
+    } catch (error) {
+      console.error("Update stops error:", error);
+      return res.status(500).json({ message: "Failed to update stops" });
+    }
+  });
+
+  app.post("/api/routes/move-stop", async (req: Request, res: Response) => {
+    try {
+      const validation = moveStopSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        const errors = validation.error.flatten();
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.fieldErrors,
+        });
+      }
+
+      const { stopId, fromRouteId, toRouteId, newSequence } = validation.data;
+
+      const fromRoute = await storage.getRoute(fromRouteId);
+      const toRoute = await storage.getRoute(toRouteId);
+
+      if (!fromRoute) {
+        return res.status(404).json({ message: "Source route not found" });
+      }
+
+      if (!toRoute) {
+        return res.status(404).json({ message: "Target route not found" });
+      }
+
+      const fromStops = [...(fromRoute.stopsJson || [])];
+      const stopIndex = fromStops.findIndex(s => s.id === stopId);
+
+      if (stopIndex === -1) {
+        return res.status(404).json({ message: "Stop not found in source route" });
+      }
+
+      const [movedStop] = fromStops.splice(stopIndex, 1);
+
+      fromStops.forEach((stop, index) => {
+        stop.sequence = index + 1;
+      });
+
+      const toStops = [...(toRoute.stopsJson || [])];
+      const insertIndex = Math.min(newSequence - 1, toStops.length);
+      movedStop.sequence = newSequence;
+      toStops.splice(insertIndex, 0, movedStop);
+
+      toStops.forEach((stop, index) => {
+        stop.sequence = index + 1;
+      });
+
+      const updatedFromRoute = await storage.updateRoute(fromRouteId, {
+        stopsJson: fromStops,
+        stopCount: fromStops.length,
+      });
+
+      const updatedToRoute = await storage.updateRoute(toRouteId, {
+        stopsJson: toStops,
+        stopCount: toStops.length,
+      });
+
+      return res.json({
+        fromRoute: updatedFromRoute,
+        toRoute: updatedToRoute,
+      });
+    } catch (error) {
+      console.error("Move stop error:", error);
+      return res.status(500).json({ message: "Failed to move stop" });
+    }
+  });
+
   app.post("/api/routes/publish", async (_req: Request, res: Response) => {
     try {
       const routes = await storage.getAllRoutes();
@@ -919,6 +1039,22 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Clock out error:", error);
       return res.status(500).json({ message: "Failed to clock out" });
+    }
+  });
+
+  // ============ CONFIG ROUTES ============
+  app.get("/api/config/maps-key", async (_req: Request, res: Response) => {
+    try {
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      
+      if (!apiKey) {
+        return res.status(404).json({ message: "Google Maps API key not configured" });
+      }
+
+      return res.json({ apiKey });
+    } catch (error) {
+      console.error("Get maps key error:", error);
+      return res.status(500).json({ message: "Failed to fetch maps key" });
     }
   });
 

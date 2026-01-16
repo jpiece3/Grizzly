@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { CSVUpload } from "@/components/upload/csv-upload";
 import { RouteCard } from "@/components/routes/route-card";
+import { RouteMapView } from "@/components/routes/route-map-view";
 import { GenerateRoutesDialog } from "@/components/routes/generate-routes-dialog";
 import { DriverAssignDialog } from "@/components/routes/driver-assign-dialog";
 import { EmptyState } from "@/components/common/empty-state";
@@ -12,7 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Map, Plus, Upload, RefreshCw, Download } from "lucide-react";
+import { Map, Grid, Plus, Upload, RefreshCw, Download } from "lucide-react";
 import type { Route, Location, User } from "@shared/schema";
 
 export default function AdminRoutesPage() {
@@ -22,6 +23,7 @@ export default function AdminRoutesPage() {
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -161,6 +163,24 @@ export default function AdminRoutesPage() {
             <Plus className="w-4 h-4 mr-2" />
             Generate Routes
           </Button>
+          <div className="flex items-center gap-1 border-l pl-2 ml-2">
+            <Button
+              variant={viewMode === "list" ? "default" : "outline"}
+              onClick={() => setViewMode("list")}
+              data-testid="button-list-view"
+            >
+              <Grid className="w-4 h-4 mr-2" />
+              List View
+            </Button>
+            <Button
+              variant={viewMode === "map" ? "default" : "outline"}
+              onClick={() => setViewMode("map")}
+              data-testid="button-map-view"
+            >
+              <Map className="w-4 h-4 mr-2" />
+              Map View
+            </Button>
+          </div>
         </div>
       }
     >
@@ -192,6 +212,8 @@ export default function AdminRoutesPage() {
             </Button>
           }
         />
+      ) : viewMode === "map" ? (
+        <RouteMapView routes={routes} />
       ) : (
         <Tabs defaultValue="all" className="space-y-6">
           <div className="flex items-center justify-between gap-4">

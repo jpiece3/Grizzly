@@ -125,12 +125,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createRoute(insertRoute: InsertRoute): Promise<Route> {
-    const [route] = await db.insert(routes).values(insertRoute).returning();
+    const [route] = await db.insert(routes).values(insertRoute as any).returning();
     return route;
   }
 
   async updateRoute(id: string, data: Partial<InsertRoute>): Promise<Route> {
-    const [route] = await db.update(routes).set(data).where(eq(routes.id, id)).returning();
+    const [route] = await db.update(routes).set(data as any).where(eq(routes.id, id)).returning();
     return route;
   }
 
