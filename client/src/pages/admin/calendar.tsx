@@ -5,7 +5,14 @@ import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { CustomerDetailDialog } from "@/components/customer/customer-detail-dialog";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, MapPin, Truck } from "lucide-react";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addWeeks, subWeeks, addMonths, subMonths, isSameMonth, isToday } from "date-fns";
 import type { Route, User } from "@shared/schema";
 
@@ -31,6 +38,11 @@ export default function AdminCalendarPage() {
     const saved = localStorage.getItem("calendar_currentDate");
     return saved ? new Date(saved) : new Date();
   });
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  const [selectedCustomerName, setSelectedCustomerName] = useState<string>("");
+  const [selectedAddress, setSelectedAddress] = useState<string>("");
 
   // Persist state to localStorage
   const handleViewModeChange = (mode: "weekly" | "monthly") => {
@@ -82,6 +94,13 @@ export default function AdminCalendarPage() {
     handleDateChange(new Date());
   };
 
+  const handleOpenCustomerDialog = (stop: { locationId: string; customerName: string; address: string }) => {
+    setSelectedLocationId(stop.locationId);
+    setSelectedCustomerName(stop.customerName);
+    setSelectedAddress(stop.address);
+    setCustomerDialogOpen(true);
+  };
+
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
@@ -104,14 +123,15 @@ export default function AdminCalendarPage() {
     return (
       <div className="space-y-1">
         {dayRoutes.map((route) => (
-          <div
+          <button
             key={route.id}
-            className={`px-2 py-1 rounded text-xs text-white ${getDriverColor(route.driverId || "")}`}
+            className={`w-full text-left px-2 py-1 rounded text-xs text-white cursor-pointer hover:opacity-90 transition-opacity ${getDriverColor(route.driverId || "")}`}
+            onClick={() => setSelectedRoute(route)}
             data-testid={`calendar-route-${route.id}`}
           >
             <p className="font-medium truncate">{route.driverName || "Unassigned"}</p>
             <p className="opacity-80">{route.stopCount} stops</p>
-          </div>
+          </button>
         ))}
       </div>
     );
@@ -223,12 +243,14 @@ export default function AdminCalendarPage() {
                   </p>
                   <div className="space-y-0.5">
                     {dayRoutes.slice(0, 3).map((route) => (
-                      <div
+                      <button
                         key={route.id}
-                        className={`px-1 py-0.5 rounded text-[10px] text-white truncate ${getDriverColor(route.driverId || "")}`}
+                        className={`w-full text-left px-1 py-0.5 rounded text-[10px] text-white truncate cursor-pointer hover:opacity-90 transition-opacity ${getDriverColor(route.driverId || "")}`}
+                        onClick={() => setSelectedRoute(route)}
+                        data-testid={`calendar-monthly-route-${route.id}`}
                       >
                         {route.driverName?.split(" ")[0] || "?"} ({route.stopCount})
-                      </div>
+                      </button>
                     ))}
                     {dayRoutes.length > 3 && (
                       <Badge variant="secondary" className="text-[10px] px-1">
@@ -242,6 +264,63 @@ export default function AdminCalendarPage() {
           </div>
         </Card>
       )}
+
+      {/* Route Details Dialog */}
+      <Dialog open={!!selectedRoute} onOpenChange={(open) => !open && setSelectedRoute(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-primary" />
+              {selectedRoute?.driverName || "Route Details"}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedRoute && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span>{selectedRoute.date ? format(new Date(selectedRoute.date), "EEEE, MMMM d, yyyy") : "No date"}</span>
+                <Badge variant="secondary">{selectedRoute.stopCount} stops</Badge>
+              </div>
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Stops
+                </h3>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {selectedRoute.stopsJson && (selectedRoute.stopsJson as Array<{ locationId: string; customerName: string; address: string }>).map((stop, index) => (
+                    <Card key={stop.locationId || index} className="p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-semibold text-primary">{index + 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <button
+                            className="text-sm font-medium text-primary hover:underline cursor-pointer text-left"
+                            onClick={() => handleOpenCustomerDialog(stop)}
+                            data-testid={`route-stop-${stop.locationId}`}
+                          >
+                            {stop.customerName}
+                          </button>
+                          <p className="text-xs text-muted-foreground truncate">{stop.address}</p>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Customer Detail Dialog */}
+      <CustomerDetailDialog
+        open={customerDialogOpen}
+        onOpenChange={setCustomerDialogOpen}
+        locationId={selectedLocationId}
+        customerName={selectedCustomerName}
+        address={selectedAddress}
+        isAdmin={true}
+      />
     </AdminLayout>
   );
 }
