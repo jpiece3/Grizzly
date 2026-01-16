@@ -24,8 +24,6 @@ export default function AdminLocationsPage() {
   const [newLocation, setNewLocation] = useState({
     name: "",
     address: "",
-    lat: "",
-    lng: "",
     radiusMeters: "100",
   });
 
@@ -40,15 +38,13 @@ export default function AdminLocationsPage() {
     mutationFn: async (data: {
       name: string;
       address: string;
-      lat: number;
-      lng: number;
       radiusMeters: number;
     }) => {
       return apiRequest<WorkLocation>("POST", "/api/work-locations", data);
     },
     onSuccess: () => {
       setShowAddDialog(false);
-      setNewLocation({ name: "", address: "", lat: "", lng: "", radiusMeters: "100" });
+      setNewLocation({ name: "", address: "", radiusMeters: "100" });
       queryClient.invalidateQueries({ queryKey: ["/api/work-locations"] });
       toast({ title: "Work location added successfully" });
     },
@@ -79,10 +75,10 @@ export default function AdminLocationsPage() {
   });
 
   const handleCreate = () => {
-    if (!newLocation.name || !newLocation.address || !newLocation.lat || !newLocation.lng) {
+    if (!newLocation.name || !newLocation.address) {
       toast({
         title: "Missing required fields",
-        description: "Please fill in all required fields",
+        description: "Please enter a location name and address",
         variant: "destructive",
       });
       return;
@@ -90,8 +86,6 @@ export default function AdminLocationsPage() {
     createLocationMutation.mutate({
       name: newLocation.name,
       address: newLocation.address,
-      lat: parseFloat(newLocation.lat),
-      lng: parseFloat(newLocation.lng),
       radiusMeters: parseInt(newLocation.radiusMeters),
     });
   };
@@ -192,29 +186,9 @@ export default function AdminLocationsPage() {
                 placeholder="123 Main St, City, State"
                 data-testid="input-location-address"
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="loc-lat">Latitude *</Label>
-                <Input
-                  id="loc-lat"
-                  value={newLocation.lat}
-                  onChange={(e) => setNewLocation({ ...newLocation, lat: e.target.value })}
-                  placeholder="40.7128"
-                  data-testid="input-location-lat"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="loc-lng">Longitude *</Label>
-                <Input
-                  id="loc-lng"
-                  value={newLocation.lng}
-                  onChange={(e) => setNewLocation({ ...newLocation, lng: e.target.value })}
-                  placeholder="-74.0060"
-                  data-testid="input-location-lng"
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Coordinates will be automatically detected from the address
+              </p>
             </div>
 
             <div className="space-y-2">

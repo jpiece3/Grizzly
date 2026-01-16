@@ -1100,23 +1100,37 @@ export async function registerRoutes(
 
   app.post("/api/work-locations", async (req: Request, res: Response) => {
     try {
-      const validation = insertWorkLocationSchema.safeParse(req.body);
-      
-      if (!validation.success) {
-        const errors = validation.error.flatten();
+      const { name, address, lat, lng, radiusMeters } = req.body;
+
+      if (!name || !address) {
         return res.status(400).json({
-          message: "Validation failed",
-          errors: errors.fieldErrors,
+          message: "Name and address are required",
         });
       }
 
-      const { name, address, lat, lng, radiusMeters } = validation.data;
+      // If lat/lng are not provided, geocode the address automatically
+      let finalLat = lat;
+      let finalLng = lng;
+
+      if (finalLat == null || finalLng == null || isNaN(parseFloat(finalLat)) || isNaN(parseFloat(finalLng))) {
+        console.log(`Geocoding work location address: "${address}"`);
+        const coords = await geocodeAddress(address);
+        if (coords) {
+          finalLat = coords.lat;
+          finalLng = coords.lng;
+          console.log(`Geocoded "${address}" -> lat: ${finalLat}, lng: ${finalLng}`);
+        } else {
+          return res.status(400).json({
+            message: "Could not find coordinates for this address. Please check the address and try again.",
+          });
+        }
+      }
 
       const location = await storage.createWorkLocation({
         name,
         address,
-        lat,
-        lng,
+        lat: parseFloat(finalLat),
+        lng: parseFloat(finalLng),
         radiusMeters: radiusMeters || 100,
       });
 
