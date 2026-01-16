@@ -95,15 +95,27 @@ export function CustomerDetailDialog({
     mutationFn: async ({ id, quantity }: { id: string; quantity: number }) => {
       return apiRequest("PATCH", `/api/location-materials/${id}`, { quantity });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/locations", locationId, "materials"] });
+    onMutate: async ({ id, quantity }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/locations", locationId, "materials"] });
+      const previousMaterials = queryClient.getQueryData<LocationMaterialWithDetails[]>(["/api/locations", locationId, "materials"]);
+      queryClient.setQueryData<LocationMaterialWithDetails[]>(
+        ["/api/locations", locationId, "materials"],
+        (old) => old?.map((lm) => lm.id === id ? { ...lm, quantity } : lm) ?? []
+      );
+      return { previousMaterials };
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousMaterials) {
+        queryClient.setQueryData(["/api/locations", locationId, "materials"], context.previousMaterials);
+      }
       toast({
         title: "Failed to update quantity",
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/locations", locationId, "materials"] });
     },
   });
 
