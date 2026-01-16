@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useGoogleMaps } from "@/hooks/use-google-maps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +21,9 @@ import {
   ChevronDown,
   GripVertical,
   ArrowRightLeft,
+  Calendar,
 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import type { Route, RouteStop } from "@shared/schema";
 import {
   DndContext,
@@ -201,12 +203,25 @@ export function RouteMapView({ routes }: RouteMapViewProps) {
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>("all");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const selectedRoute = routes.find((r) => r.id === selectedRouteId);
-  const selectedRouteIndex = routes.findIndex((r) => r.id === selectedRouteId);
+  // Get unique dates from routes for the filter
+  const availableDates = useMemo(() => {
+    const dateSet = new Set(routes.filter((r) => r.date).map((r) => r.date));
+    return Array.from(dateSet).sort() as string[];
+  }, [routes]);
+
+  // Filter routes by selected date
+  const filteredRoutes = useMemo(() => {
+    if (selectedDate === "all") return routes;
+    return routes.filter((r) => r.date === selectedDate);
+  }, [routes, selectedDate]);
+
+  const selectedRoute = filteredRoutes.find((r) => r.id === selectedRouteId);
+  const selectedRouteIndex = filteredRoutes.findIndex((r) => r.id === selectedRouteId);
   const selectedRouteColor =
     selectedRouteIndex >= 0
       ? ROUTE_COLORS[selectedRouteIndex % ROUTE_COLORS.length]
@@ -395,7 +410,7 @@ export function RouteMapView({ routes }: RouteMapViewProps) {
     const bounds = new google.maps.LatLngBounds();
     let hasValidCoordinates = false;
 
-    routes.forEach((route, routeIndex) => {
+    filteredRoutes.forEach((route, routeIndex) => {
       const stops = (route.stopsJson || []) as RouteStop[];
       const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length];
       const isSelected = route.id === selectedRouteId;
@@ -492,7 +507,7 @@ export function RouteMapView({ routes }: RouteMapViewProps) {
       mapInstanceRef.current.setCenter(BALTIMORE_CENTER);
       mapInstanceRef.current.setZoom(11);
     }
-  }, [routes, isLoaded, selectedRouteId]);
+  }, [filteredRoutes, isLoaded, selectedRouteId]);
 
   if (error || mapError) {
     return (
@@ -514,7 +529,7 @@ export function RouteMapView({ routes }: RouteMapViewProps) {
     );
   }
 
-  const totalStops = routes.reduce((sum, route) => {
+  const totalStops = filteredRoutes.reduce((sum, route) => {
     const stops = (route.stopsJson || []) as RouteStop[];
     return sum + stops.length;
   }, 0);
@@ -523,14 +538,30 @@ export function RouteMapView({ routes }: RouteMapViewProps) {
     <div className="flex gap-4" data-testid="route-map-view">
       <Card className="flex-1 overflow-hidden">
         <div className="px-4 py-3 border-b flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <MapPin className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium">
-              {routes.length} routes • {totalStops} stops
+              {filteredRoutes.length} routes • {totalStops} stops
             </span>
+            {availableDates.length > 0 && (
+              <Select value={selectedDate} onValueChange={setSelectedDate}>
+                <SelectTrigger className="h-8 w-[180px]" data-testid="select-date-filter">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Filter by date" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Dates</SelectItem>
+                  {availableDates.map((date) => (
+                    <SelectItem key={date} value={date}>
+                      {format(parseISO(date), "MMM d, yyyy")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {routes.slice(0, 5).map((route, index) => {
+            {filteredRoutes.slice(0, 5).map((route, index) => {
               const stops = (route.stopsJson || []) as RouteStop[];
               const isSelected = route.id === selectedRouteId;
               return (
