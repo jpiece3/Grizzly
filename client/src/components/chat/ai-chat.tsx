@@ -102,15 +102,16 @@ export function AIChat() {
   return (
     <>
       {!isOpen && (
-        <Button
-          data-testid="button-open-chat"
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 rounded-full shadow-lg z-50"
-          size="lg"
-        >
-          <MessageCircle className="h-5 w-5 mr-2" />
-          <span>Ask AI</span>
-        </Button>
+        <div className="fixed bottom-6 right-6 z-50">
+          <Button
+            data-testid="button-open-chat"
+            onClick={() => setIsOpen(true)}
+            className="rounded-full shadow-lg px-4"
+          >
+            <MessageCircle className="h-5 w-5 mr-2" />
+            <span>Ask AI</span>
+          </Button>
+        </div>
       )}
 
       {isOpen && (
