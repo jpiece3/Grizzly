@@ -18,16 +18,7 @@ import type { Route, User } from "@shared/schema";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const ROUTE_COLORS = [
-  "bg-blue-500",
-  "bg-green-500",
-  "bg-purple-500",
-  "bg-orange-500",
-  "bg-pink-500",
-  "bg-teal-500",
-  "bg-indigo-500",
-  "bg-red-500",
-];
+const FALLBACK_COLORS = ["#3B82F6", "#22C55E", "#A855F7", "#F97316", "#EC4899", "#14B8A6", "#6366F1", "#EF4444"];
 
 export default function AdminCalendarPage() {
   const [viewMode, setViewMode] = useState<"weekly" | "monthly">(() => {
@@ -65,8 +56,10 @@ export default function AdminCalendarPage() {
   const driverList = drivers.filter((u) => u.role === "driver");
 
   const getDriverColor = (driverId: string): string => {
+    const driver = driverList.find((d) => d.id === driverId);
+    if (driver?.color) return driver.color;
     const index = driverList.findIndex((d) => d.id === driverId);
-    return ROUTE_COLORS[index % ROUTE_COLORS.length];
+    return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
   };
 
   const getRoutesForDate = (date: Date) => {
@@ -125,7 +118,8 @@ export default function AdminCalendarPage() {
         {dayRoutes.map((route) => (
           <button
             key={route.id}
-            className={`w-full text-left px-2 py-1 rounded text-xs text-white cursor-pointer hover:opacity-90 transition-opacity ${getDriverColor(route.driverId || "")}`}
+            className="w-full text-left px-2 py-1 rounded text-xs text-white cursor-pointer hover:opacity-90 transition-opacity"
+            style={{ backgroundColor: route.driverColor || getDriverColor(route.driverId || "") }}
             onClick={() => setSelectedRoute(route)}
             data-testid={`calendar-route-${route.id}`}
           >
@@ -184,8 +178,11 @@ export default function AdminCalendarPage() {
         <div className="flex items-center gap-2">
           {driverList.slice(0, 5).map((driver) => (
             <div key={driver.id} className="flex items-center gap-1">
-              <div className={`w-3 h-3 rounded-full ${getDriverColor(driver.id)}`} />
-              <span className="text-xs text-muted-foreground">{driver.name.split(" ")[0]}</span>
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: getDriverColor(driver.id) }}
+              />
+              <span className="text-xs" style={{ color: driver.color || 'hsl(var(--muted-foreground))' }}>{driver.name.split(" ")[0]}</span>
             </div>
           ))}
         </div>
@@ -245,7 +242,8 @@ export default function AdminCalendarPage() {
                     {dayRoutes.slice(0, 3).map((route) => (
                       <button
                         key={route.id}
-                        className={`w-full text-left px-1 py-0.5 rounded text-[10px] text-white truncate cursor-pointer hover:opacity-90 transition-opacity ${getDriverColor(route.driverId || "")}`}
+                        className="w-full text-left px-1 py-0.5 rounded text-[10px] text-white truncate cursor-pointer hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: route.driverColor || getDriverColor(route.driverId || "") }}
                         onClick={() => setSelectedRoute(route)}
                         data-testid={`calendar-monthly-route-${route.id}`}
                       >

@@ -43,7 +43,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const ROUTE_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
+const FALLBACK_COLORS = ["#3B82F6", "#22C55E", "#A855F7", "#F97316", "#EC4899", "#14B8A6", "#6366F1", "#EF4444"];
 
 const BALTIMORE_CENTER = { lat: 39.2904, lng: -76.6122 };
 
@@ -157,11 +157,8 @@ function SortableStopCard({
                   {routes
                     .filter((r) => r.id !== selectedRouteId)
                     .map((route) => {
-                      const routeColor =
-                        ROUTE_COLORS[
-                          routes.findIndex((r) => r.id === route.id) %
-                            ROUTE_COLORS.length
-                        ];
+                      const routeIndex = routes.findIndex((r) => r.id === route.id);
+                      const routeColor = route.driverColor || FALLBACK_COLORS[routeIndex % FALLBACK_COLORS.length];
                       return (
                         <SelectItem key={route.id} value={route.id}>
                           <div className="flex items-center gap-2">
@@ -224,7 +221,7 @@ export function RouteMapView({ routes }: RouteMapViewProps) {
   const selectedRouteIndex = filteredRoutes.findIndex((r) => r.id === selectedRouteId);
   const selectedRouteColor =
     selectedRouteIndex >= 0
-      ? ROUTE_COLORS[selectedRouteIndex % ROUTE_COLORS.length]
+      ? (selectedRoute?.driverColor || FALLBACK_COLORS[selectedRouteIndex % FALLBACK_COLORS.length])
       : null;
   const selectedStops = selectedRoute
     ? ((selectedRoute.stopsJson || []) as RouteStop[])
@@ -412,7 +409,7 @@ export function RouteMapView({ routes }: RouteMapViewProps) {
 
     filteredRoutes.forEach((route, routeIndex) => {
       const stops = (route.stopsJson || []) as RouteStop[];
-      const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length];
+      const color = route.driverColor || FALLBACK_COLORS[routeIndex % FALLBACK_COLORS.length];
       const isSelected = route.id === selectedRouteId;
       const opacity = selectedRouteId ? (isSelected ? 1 : 0.3) : 1;
 
@@ -580,7 +577,7 @@ export function RouteMapView({ routes }: RouteMapViewProps) {
                   <div
                     className="w-3 h-3 rounded-full"
                     style={{
-                      backgroundColor: ROUTE_COLORS[index % ROUTE_COLORS.length],
+                      backgroundColor: route.driverColor || FALLBACK_COLORS[index % FALLBACK_COLORS.length],
                     }}
                   />
                   <span
