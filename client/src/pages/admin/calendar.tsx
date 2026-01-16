@@ -43,9 +43,7 @@ export default function AdminCalendarPage() {
 
   const getRoutesForDate = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return routes.filter(
-      (route) => route.date === dateStr && (route.status === "assigned" || route.status === "published")
-    );
+    return routes.filter((route) => route.date === dateStr);
   };
 
   const navigateBack = () => {

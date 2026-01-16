@@ -42,7 +42,8 @@ A mobile-optimized web application for managing mat delivery driver schedules, G
    - Auto-generate optimized routes per day using K-means clustering + nearest-neighbor algorithm
    - Google Routes API integration for optimal waypoint ordering
    - **Routes automatically start and end at the Warehouse** (583 Frederick Road, Catonsville, MD 21228)
-   - Routes are grouped by day of week based on location day assignments
+   - **Date-specific scheduling**: Routes are generated for specific dates (not recurring weekly)
+   - Generate Routes dialog shows next 14 days with actual dates (e.g., "Monday - Jan 20")
    - Interactive Map View with colored markers per route
    - Move stops up/down within a route or reassign to different drivers
    - Assign drivers to routes
@@ -52,6 +53,7 @@ A mobile-optimized web application for managing mat delivery driver schedules, G
 3. **Calendar View**
    - Weekly view (default) showing routes per driver per day
    - Monthly view with route summaries per day
+   - **Routes appear only on their specific scheduled date** (not every occurrence of that day)
    - Color-coded routes by driver
    - Navigation controls (back, forward, today)
 
@@ -100,7 +102,7 @@ A mobile-optimized web application for managing mat delivery driver schedules, G
 
 ### Routes
 - `GET /api/routes` - Get all routes (optional: ?driverId=, ?dayOfWeek=)
-- `POST /api/routes/generate` - Generate routes from locations (body: { driverCount, dayOfWeek })
+- `POST /api/routes/generate` - Generate routes from locations (body: { driverCount, dayOfWeek, scheduledDate })
 - `PATCH /api/routes/:id/assign` - Assign driver to route
 - `PATCH /api/routes/:id/stops` - Update stop order within a route
 - `POST /api/routes/move-stop` - Move stop from one route to another
