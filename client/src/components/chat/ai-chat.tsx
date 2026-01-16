@@ -42,13 +42,12 @@ export function AIChat() {
     setIsLoading(true);
 
     try {
-      const response = await apiRequest("POST", "/api/chat", {
+      const data = await apiRequest<{ response: string }>("POST", "/api/chat", {
         message: userMessage,
         conversationHistory: messages.slice(-10),
         userId: user.id,
       });
 
-      const data = await response.json() as { response: string };
       setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
     } catch (error: unknown) {
       setMessages(prev => [...prev, { 
