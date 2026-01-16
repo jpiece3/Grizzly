@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { CSVUpload } from "@/components/upload/csv-upload";
@@ -8,21 +8,38 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { MapPin, Upload, Trash2, Search, Check, Calendar, Building2 } from "lucide-react";
+import { MapPin, Upload, Trash2, Search, Check, Calendar, Building2, Grid, List, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Location } from "@shared/schema";
 
 const DAYS_OF_WEEK = [
-  { value: "monday", label: "Mon", fullLabel: "Monday", color: "bg-blue-500" },
-  { value: "tuesday", label: "Tue", fullLabel: "Tuesday", color: "bg-green-500" },
-  { value: "wednesday", label: "Wed", fullLabel: "Wednesday", color: "bg-yellow-500" },
-  { value: "thursday", label: "Thu", fullLabel: "Thursday", color: "bg-orange-500" },
-  { value: "friday", label: "Fri", fullLabel: "Friday", color: "bg-red-500" },
-  { value: "saturday", label: "Sat", fullLabel: "Saturday", color: "bg-purple-500" },
-  { value: "sunday", label: "Sun", fullLabel: "Sunday", color: "bg-pink-500" },
+  { value: "monday", label: "Mon", fullLabel: "Monday" },
+  { value: "tuesday", label: "Tue", fullLabel: "Tuesday" },
+  { value: "wednesday", label: "Wed", fullLabel: "Wednesday" },
+  { value: "thursday", label: "Thu", fullLabel: "Thursday" },
+  { value: "friday", label: "Fri", fullLabel: "Friday" },
+  { value: "saturday", label: "Sat", fullLabel: "Saturday" },
+  { value: "sunday", label: "Sun", fullLabel: "Sunday" },
 ];
+
+type SortField = "customerName" | "address" | "daysCount";
+type SortDirection = "asc" | "desc";
 
 export default function AdminStopsPage() {
   const [showUpload, setShowUpload] = useState(false);
@@ -30,6 +47,9 @@ export default function AdminStopsPage() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDay, setFilterDay] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
+  const [sortField, setSortField] = useState<SortField>("customerName");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -107,30 +127,58 @@ export default function AdminStopsPage() {
     updateLocationMutation.mutate({ id: location.id, daysOfWeek: newDays });
   };
 
-  const handleQuickAssign = (location: Location, day: string) => {
-    const currentDays = location.daysOfWeek || [];
-    if (!currentDays.includes(day)) {
-      updateLocationMutation.mutate({ id: location.id, daysOfWeek: [...currentDays, day] });
-      toast({ title: `Added to ${DAYS_OF_WEEK.find(d => d.value === day)?.fullLabel}` });
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
     }
   };
 
-  // Filter locations
-  let filteredLocations = locations.filter(
-    (loc) =>
-      loc.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      loc.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter and sort locations - use useMemo to maintain stable order
+  const filteredAndSortedLocations = useMemo(() => {
+    let result = [...locations];
 
-  if (filterDay !== "all" && filterDay !== "unscheduled") {
-    filteredLocations = filteredLocations.filter((loc) => 
-      loc.daysOfWeek?.includes(filterDay)
-    );
-  } else if (filterDay === "unscheduled") {
-    filteredLocations = filteredLocations.filter((loc) => 
-      !loc.daysOfWeek || loc.daysOfWeek.length === 0
-    );
-  }
+    // Apply search filter
+    if (searchQuery) {
+      result = result.filter(
+        (loc) =>
+          loc.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          loc.address.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Apply day filter
+    if (filterDay !== "all" && filterDay !== "unscheduled") {
+      result = result.filter((loc) => loc.daysOfWeek?.includes(filterDay));
+    } else if (filterDay === "unscheduled") {
+      result = result.filter((loc) => !loc.daysOfWeek || loc.daysOfWeek.length === 0);
+    }
+
+    // Apply sorting only in list view
+    if (viewMode === "list") {
+      result.sort((a, b) => {
+        let comparison = 0;
+        
+        switch (sortField) {
+          case "customerName":
+            comparison = a.customerName.localeCompare(b.customerName);
+            break;
+          case "address":
+            comparison = a.address.localeCompare(b.address);
+            break;
+          case "daysCount":
+            comparison = (a.daysOfWeek?.length || 0) - (b.daysOfWeek?.length || 0);
+            break;
+        }
+        
+        return sortDirection === "asc" ? comparison : -comparison;
+      });
+    }
+
+    return result;
+  }, [locations, searchQuery, filterDay, viewMode, sortField, sortDirection]);
 
   // Count locations per day
   const countByDay = DAYS_OF_WEEK.reduce((acc, day) => {
@@ -140,15 +188,44 @@ export default function AdminStopsPage() {
 
   const unscheduledCount = locations.filter((loc) => !loc.daysOfWeek || loc.daysOfWeek.length === 0).length;
 
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-4 h-4 ml-1" />;
+    return sortDirection === "asc" 
+      ? <ArrowUp className="w-4 h-4 ml-1" /> 
+      : <ArrowDown className="w-4 h-4 ml-1" />;
+  };
+
   return (
     <AdminLayout
       title="Delivery Stops"
       subtitle={`${locations.length} stops total`}
       actions={
-        <Button onClick={() => setShowUpload(!showUpload)} data-testid="button-upload-csv">
-          <Upload className="w-4 h-4 mr-2" />
-          Upload CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border rounded-lg">
+            <Button
+              variant={viewMode === "cards" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("cards")}
+              data-testid="button-view-cards"
+            >
+              <Grid className="w-4 h-4 mr-1" />
+              Cards
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+              data-testid="button-view-list"
+            >
+              <List className="w-4 h-4 mr-1" />
+              List
+            </Button>
+          </div>
+          <Button onClick={() => setShowUpload(!showUpload)} data-testid="button-upload-csv">
+            <Upload className="w-4 h-4 mr-2" />
+            Upload CSV
+          </Button>
+        </div>
       }
     >
       {showUpload && (
@@ -233,125 +310,229 @@ export default function AdminStopsPage() {
             </Card>
           )}
 
-          {/* Search */}
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by customer or address..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-search-stops"
-            />
+          {/* Search and Filters */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by customer or address..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-stops"
+              />
+            </div>
+            {viewMode === "list" && (
+              <Select value={filterDay} onValueChange={setFilterDay}>
+                <SelectTrigger className="w-40" data-testid="select-filter-day">
+                  <SelectValue placeholder="Filter by day" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Days</SelectItem>
+                  <SelectItem value="unscheduled">Unscheduled</SelectItem>
+                  {DAYS_OF_WEEK.map((day) => (
+                    <SelectItem key={day.value} value={day.value}>
+                      {day.fullLabel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
-          {/* Stops List */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredLocations.map((location) => (
-              <Card key={location.id} className="overflow-hidden" data-testid={`stop-card-${location.id}`}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base truncate">{location.customerName}</CardTitle>
-                      {location.serviceType && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{location.serviceType}</p>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteLocationMutation.mutate(location.id)}
-                      data-testid={`button-delete-stop-${location.id}`}
+          {/* List View */}
+          {viewMode === "list" ? (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead 
+                      className="cursor-pointer select-none"
+                      onClick={() => handleSort("customerName")}
+                      data-testid="sort-customer"
                     >
-                      <Trash2 className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                    <MapPin className="w-3 h-3" />
-                    <span className="truncate">{location.address}</span>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Schedule Days</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {DAYS_OF_WEEK.map((day) => {
-                      const isSelected = location.daysOfWeek?.includes(day.value);
-                      return (
-                        <button
-                          key={day.value}
-                          onClick={() => handleDayToggle(location, day.value)}
-                          className={`relative w-10 h-10 rounded-lg text-xs font-medium transition-all flex items-center justify-center ${
-                            isSelected
-                              ? "bg-primary text-primary-foreground shadow-sm"
-                              : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent hover:border-primary/20"
-                          }`}
-                          data-testid={`day-toggle-${location.id}-${day.value}`}
-                          title={isSelected ? `Remove from ${day.fullLabel}` : `Add to ${day.fullLabel}`}
-                        >
-                          {day.label}
-                          {isSelected && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-status-online text-white flex items-center justify-center">
-                              <Check className="w-2.5 h-2.5" />
-                            </div>
+                      <div className="flex items-center">
+                        Customer
+                        <SortIcon field="customerName" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer select-none"
+                      onClick={() => handleSort("address")}
+                      data-testid="sort-address"
+                    >
+                      <div className="flex items-center">
+                        Address
+                        <SortIcon field="address" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer select-none text-center"
+                      onClick={() => handleSort("daysCount")}
+                      data-testid="sort-days"
+                    >
+                      <div className="flex items-center justify-center">
+                        Schedule Days
+                        <SortIcon field="daysCount" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAndSortedLocations.map((location) => (
+                    <TableRow key={location.id} data-testid={`stop-row-${location.id}`}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{location.customerName}</p>
+                          {location.serviceType && (
+                            <p className="text-xs text-muted-foreground">{location.serviceType}</p>
                           )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  
-                  {/* Quick assign for unscheduled */}
-                  {(!location.daysOfWeek || location.daysOfWeek.length === 0) && (
-                    <div className="mt-3 pt-3 border-t">
-                      <p className="text-xs text-muted-foreground mb-2">Quick assign:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {DAYS_OF_WEEK.slice(0, 5).map((day) => (
-                          <Button
-                            key={day.value}
-                            variant="outline"
-                            size="sm"
-                            className="text-xs h-7"
-                            onClick={() => handleQuickAssign(location, day.value)}
-                            data-testid={`quick-assign-${location.id}-${day.value}`}
-                          >
-                            {day.label}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Show scheduled days summary */}
-                  {location.daysOfWeek && location.daysOfWeek.length > 0 && (
-                    <div className="mt-3 pt-3 border-t">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Calendar className="w-3 h-3" />
-                        <span>
-                          {location.daysOfWeek.length === 1 
-                            ? "Weekly" 
-                            : `${location.daysOfWeek.length}x per week`}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {filteredLocations.length === 0 && (
-            <Card className="p-8">
-              <div className="text-center text-muted-foreground">
-                <Building2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="font-medium">No stops found</p>
-                <p className="text-sm mt-1">
-                  {filterDay === "unscheduled" 
-                    ? "All stops have been scheduled" 
-                    : searchQuery 
-                      ? "Try adjusting your search" 
-                      : `No stops scheduled for ${DAYS_OF_WEEK.find(d => d.value === filterDay)?.fullLabel || "this day"}`}
-                </p>
-              </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <p className="text-sm text-muted-foreground">{location.address}</p>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-center gap-1">
+                          {DAYS_OF_WEEK.map((day) => {
+                            const isSelected = location.daysOfWeek?.includes(day.value);
+                            return (
+                              <button
+                                key={day.value}
+                                onClick={() => handleDayToggle(location, day.value)}
+                                className={`w-9 h-9 rounded-lg text-xs font-medium transition-all ${
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                }`}
+                                data-testid={`day-toggle-${location.id}-${day.value}`}
+                                title={day.fullLabel}
+                              >
+                                {day.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteLocationMutation.mutate(location.id)}
+                          data-testid={`button-delete-stop-${location.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {filteredAndSortedLocations.length === 0 && (
+                <div className="p-8 text-center text-muted-foreground">
+                  <Building2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium">No stops found</p>
+                  <p className="text-sm mt-1">
+                    {filterDay === "unscheduled" 
+                      ? "All stops have been scheduled" 
+                      : searchQuery 
+                        ? "Try adjusting your search" 
+                        : `No stops scheduled for ${DAYS_OF_WEEK.find(d => d.value === filterDay)?.fullLabel || "this day"}`}
+                  </p>
+                </div>
+              )}
             </Card>
+          ) : (
+            /* Card View */
+            <>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredAndSortedLocations.map((location) => (
+                  <Card key={location.id} className="overflow-hidden" data-testid={`stop-card-${location.id}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-base truncate">{location.customerName}</CardTitle>
+                          {location.serviceType && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{location.serviceType}</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteLocationMutation.mutate(location.id)}
+                          data-testid={`button-delete-stop-${location.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                        <MapPin className="w-3 h-3" />
+                        <span className="truncate">{location.address}</span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Schedule Days</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {DAYS_OF_WEEK.map((day) => {
+                          const isSelected = location.daysOfWeek?.includes(day.value);
+                          return (
+                            <button
+                              key={day.value}
+                              onClick={() => handleDayToggle(location, day.value)}
+                              className={`relative w-10 h-10 rounded-lg text-xs font-medium transition-all flex items-center justify-center ${
+                                isSelected
+                                  ? "bg-primary text-primary-foreground shadow-sm"
+                                  : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent hover:border-primary/20"
+                              }`}
+                              data-testid={`day-toggle-${location.id}-${day.value}`}
+                              title={isSelected ? `Remove from ${day.fullLabel}` : `Add to ${day.fullLabel}`}
+                            >
+                              {day.label}
+                              {isSelected && (
+                                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-status-online text-white flex items-center justify-center">
+                                  <Check className="w-2.5 h-2.5" />
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Show scheduled days summary */}
+                      {location.daysOfWeek && location.daysOfWeek.length > 0 && (
+                        <div className="mt-3 pt-3 border-t">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="w-3 h-3" />
+                            <span>
+                              {location.daysOfWeek.length === 1 
+                                ? "Weekly" 
+                                : `${location.daysOfWeek.length}x per week`}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {filteredAndSortedLocations.length === 0 && (
+                <Card className="p-8">
+                  <div className="text-center text-muted-foreground">
+                    <Building2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="font-medium">No stops found</p>
+                    <p className="text-sm mt-1">
+                      {filterDay === "unscheduled" 
+                        ? "All stops have been scheduled" 
+                        : searchQuery 
+                          ? "Try adjusting your search" 
+                          : `No stops scheduled for ${DAYS_OF_WEEK.find(d => d.value === filterDay)?.fullLabel || "this day"}`}
+                    </p>
+                  </div>
+                </Card>
+              )}
+            </>
           )}
         </div>
       )}
