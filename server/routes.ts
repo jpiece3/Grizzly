@@ -1570,8 +1570,8 @@ export async function registerRoutes(
         return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
       };
       
-      // Build detailed route information for today
-      const todaysRoutesDetailed = todaysRoutes.map(r => {
+      // Build detailed route information for ALL routes (so AI can answer questions about any date)
+      const allRoutesDetailed = routes.map(r => {
         const driver = users.find(u => u.id === r.driverId);
         const stops = (r.stopsJson as RouteStop[]) || [];
         const sortedStops = [...stops].sort((a, b) => a.sequence - b.sequence);
@@ -1579,7 +1579,9 @@ export async function registerRoutes(
         
         return {
           routeId: r.id,
-          driverName: driver?.name || "Unassigned",
+          date: r.date,
+          dayOfWeek: r.dayOfWeek,
+          driverName: driver?.name || r.driverName || "Unassigned",
           status: r.status,
           stopCount: sortedStops.length,
           stops: sortedStops.map(s => ({
@@ -1591,6 +1593,14 @@ export async function registerRoutes(
           googleMapsLink: mapsLink
         };
       });
+      
+      // Group routes by date for easier reading
+      const routesByDate = allRoutesDetailed.reduce((acc, route) => {
+        const dateKey = route.date || "Unscheduled";
+        if (!acc[dateKey]) acc[dateKey] = [];
+        acc[dateKey].push(route);
+        return acc;
+      }, {} as Record<string, typeof allRoutesDetailed>);
 
       // Build data summary for the AI
       const dataSummary = `
@@ -1610,22 +1620,27 @@ ${["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
   return `- ${day.charAt(0).toUpperCase() + day.slice(1)}: ${count} stops`;
 }).join("\n")}
 
-### Routes
+### Routes Overview
 - Total routes: ${routes.length}
 - Published routes: ${publishedRoutes.length}
 - Assigned routes: ${assignedRoutes.length}
 - Draft routes: ${draftRoutes.length}
-- Today's routes (${todayDayOfWeek}): ${todaysRoutes.length}
+- Today's routes (${todayFormatted}): ${todaysRoutes.length}
 
-### Today's Schedule (${todayFormatted} - ${todayDayOfWeek.charAt(0).toUpperCase() + todayDayOfWeek.slice(1)})
-${todaysRoutesDetailed.length > 0 ? todaysRoutesDetailed.map(r => {
-  const stopsDetail = r.stops.map(s => `  ${s.sequence}. ${s.customerName} - ${s.address}`).join("\n");
-  return `
-**${r.driverName}'s Route** (${r.status}) - ${r.stopCount} stops
+### All Routes by Date (with stops and Google Maps links)
+${Object.entries(routesByDate)
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([date, dateRoutes]) => {
+    const routesInfo = dateRoutes.map(r => {
+      const stopsDetail = r.stops.map(s => `    ${s.sequence}. ${s.customerName} - ${s.address}`).join("\n");
+      return `  **Driver: ${r.driverName}** (${r.status}) - ${r.stopCount} stops
 ${stopsDetail}
-Google Maps Link: ${r.googleMapsLink}
-`;
-}).join("\n") : "No routes scheduled for today"}
+    Google Maps Link: ${r.googleMapsLink}`;
+    }).join("\n\n");
+    return `
+#### ${date} (${dateRoutes[0]?.dayOfWeek || "N/A"})
+${routesInfo}`;
+  }).join("\n") || "No routes in the system"}
 
 ### Work Locations
 ${workLocations.map(wl => `- ${wl.name}: ${wl.address} (radius: ${wl.radiusMeters}m)`).join("\n") || "None configured"}
@@ -1648,11 +1663,12 @@ ${workLocations.map(wl => `- ${wl.name}: ${wl.address} (radius: ${wl.radiusMeter
 - Be concise but helpful
 - Reference specific features and steps when explaining how to do things
 - Use the actual data when answering questions about routes, drivers, or schedules
+- When asked about routes for a specific date (e.g., "January 21", "1/21", "Jan 21"), look in the "All Routes by Date" section and find the matching date (format: YYYY-MM-DD)
 - When asked about routes, list the driver name, number of stops, and each stop with its sequence number, customer name, and address
-- When asked for Google Maps links, provide the full clickable link from the data (they start and end at the warehouse)
+- When asked for Google Maps links, provide the full clickable link from the data (routes start and end at the warehouse)
 - If you don't know something, admit it and suggest where they might find the answer
 - Format responses with markdown for readability
-- Make links clickable by using proper markdown format: [Link Text](URL)
+- Make links clickable by using proper markdown format: [Open in Google Maps](URL)
 
 ## App Documentation:
 ${helpContent}
