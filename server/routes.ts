@@ -235,6 +235,7 @@ function delay(ms: number): Promise<void> {
 interface GoogleRoutesOptimizationResult {
   optimizedStops: RouteStop[];
   totalDistanceKm: number;
+  estimatedTimeMinutes: number;
 }
 
 // Optimize route using Google Routes API with waypoint optimization
@@ -298,7 +299,7 @@ async function optimizeRouteWithGoogle(
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "routes.distanceMeters,routes.optimizedIntermediateWaypointIndex"
+        "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.optimizedIntermediateWaypointIndex"
       },
       body: JSON.stringify(requestBody)
     });
@@ -321,6 +322,14 @@ async function optimizeRouteWithGoogle(
     const distanceMeters = route.distanceMeters || 0;
     const totalDistanceKm = Math.round((distanceMeters / 1000) * 10) / 10;
 
+    // Parse duration (format: "1234s" for seconds)
+    let estimatedTimeMinutes = 0;
+    if (route.duration) {
+      const durationStr = route.duration.toString();
+      const seconds = parseInt(durationStr.replace('s', '')) || 0;
+      estimatedTimeMinutes = Math.ceil(seconds / 60);
+    }
+
     // Reorder stops based on optimized waypoint indices
     let optimizedStops: RouteStop[];
 
@@ -341,8 +350,8 @@ async function optimizeRouteWithGoogle(
       sequence: index + 1
     }));
 
-    console.log(`Google route optimization complete: ${totalDistanceKm}km total distance`);
-    return { optimizedStops, totalDistanceKm };
+    console.log(`Google route optimization complete: ${totalDistanceKm}km, ${estimatedTimeMinutes} min`);
+    return { optimizedStops, totalDistanceKm, estimatedTimeMinutes };
 
   } catch (error) {
     console.error("Google Routes API error:", error);
@@ -635,24 +644,25 @@ export async function registerRoutes(
 
           // Try Google Routes API optimization for better results
           let totalDistance: number | null = null;
+          let estimatedTime: number | null = null;
           const googleResult = await optimizeRouteWithGoogle(stops);
           
           if (googleResult) {
-            // Use Google's optimized order and real driving distance
+            // Use Google's optimized order, real driving distance and time
             stops = googleResult.optimizedStops;
             totalDistance = googleResult.totalDistanceKm;
-            console.log(`Route optimized with Google: ${stops.length} stops, ${totalDistance}km`);
+            estimatedTime = googleResult.estimatedTimeMinutes;
+            console.log(`Route optimized with Google: ${stops.length} stops, ${totalDistance}km, ${estimatedTime} min`);
           } else {
             // Fall back to Haversine distance calculation
             totalDistance = calculateRouteDistance(stops);
-            console.log(`Route using nearest-neighbor: ${stops.length} stops, ${totalDistance}km (Haversine)`);
+            // Estimate driving time: assume average 40 km/h + 5 min per stop
+            estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (stops.length * 5) : stops.length * 15;
+            console.log(`Route using nearest-neighbor: ${stops.length} stops, ${totalDistance}km (Haversine), ${estimatedTime} min est`);
           }
 
           // Generate Google Maps URL with all stops
           const mapsUrl = generateGoogleMapsUrl(stops);
-
-          // Estimate time (rough estimate: 10 min per stop + 5 min travel between)
-          const estimatedTime = stops.length * 15;
 
           const route = await storage.createRoute({
             date: format(new Date(), "yyyy-MM-dd"),
@@ -696,6 +706,7 @@ export async function registerRoutes(
 
           // Try Google Routes API optimization if stops have coordinates
           let totalDistance: number | null = null;
+          let estimatedTime: number | null = null;
           const stopsHaveCoords = stops.every(s => s.lat != null && s.lng != null);
           
           if (stopsHaveCoords) {
@@ -703,19 +714,22 @@ export async function registerRoutes(
             if (googleResult) {
               stops = googleResult.optimizedStops;
               totalDistance = googleResult.totalDistanceKm;
-              console.log(`Route optimized with Google: ${stops.length} stops, ${totalDistance}km`);
+              estimatedTime = googleResult.estimatedTimeMinutes;
+              console.log(`Route optimized with Google: ${stops.length} stops, ${totalDistance}km, ${estimatedTime} min`);
             } else {
               // Fall back to Haversine distance calculation
               totalDistance = calculateRouteDistance(stops);
-              console.log(`Route using round-robin: ${stops.length} stops, ${totalDistance}km (Haversine)`);
+              // Estimate driving time: assume average 40 km/h + 5 min per stop
+              estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (stops.length * 5) : stops.length * 15;
+              console.log(`Route using round-robin: ${stops.length} stops, ${totalDistance}km (Haversine), ${estimatedTime} min est`);
             }
+          } else {
+            // No coordinates - use rough estimate
+            estimatedTime = stops.length * 15;
           }
 
           // Generate Google Maps URL with all stops
           const mapsUrl = generateGoogleMapsUrl(stops);
-
-          // Estimate time (rough estimate: 10 min per stop + 5 min travel between)
-          const estimatedTime = stops.length * 15;
 
           const route = await storage.createRoute({
             date: format(new Date(), "yyyy-MM-dd"),
