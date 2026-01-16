@@ -722,16 +722,19 @@ export async function registerRoutes(
           totalDistance = googleResult.totalDistanceKm;
           estimatedTime = googleResult.estimatedTimeMinutes;
           console.log(`Route for ${dayOfWeek} optimized with Google: ${deliveryStops.length} stops, ${totalDistance}km, ${estimatedTime} min`);
-        } else {
-          totalDistance = calculateRouteDistance(deliveryStops);
-          estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (deliveryStops.length * 5) : deliveryStops.length * 15;
-          console.log(`Route for ${dayOfWeek} using nearest-neighbor: ${deliveryStops.length} stops, ${totalDistance}km (Haversine), ${estimatedTime} min est`);
         }
 
         // Add warehouse at start and end
         const warehouseStart = createWarehouseStop(1, true);
         const warehouseEnd = createWarehouseStop(deliveryStops.length + 2, false);
         const stops = [warehouseStart, ...deliveryStops, warehouseEnd];
+
+        // Calculate distance using full route including warehouse if Google didn't provide it
+        if (!googleResult) {
+          totalDistance = calculateRouteDistance(stops);
+          estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (deliveryStops.length * 5) : deliveryStops.length * 15;
+          console.log(`Route for ${dayOfWeek} using nearest-neighbor: ${deliveryStops.length} stops, ${totalDistance}km (Haversine), ${estimatedTime} min est`);
+        }
 
         const mapsUrl = generateGoogleMapsUrl(stops);
 
@@ -776,6 +779,7 @@ export async function registerRoutes(
 
         let totalDistance: number | null = null;
         let estimatedTime: number | null = null;
+        let googleOptimized = false;
         const stopsHaveCoords = deliveryStops.every(s => s.lat != null && s.lng != null);
         
         if (stopsHaveCoords) {
@@ -788,18 +792,22 @@ export async function registerRoutes(
             });
             totalDistance = googleResult.totalDistanceKm;
             estimatedTime = googleResult.estimatedTimeMinutes;
-          } else {
-            totalDistance = calculateRouteDistance(deliveryStops);
-            estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (deliveryStops.length * 5) : deliveryStops.length * 15;
+            googleOptimized = true;
           }
-        } else {
-          estimatedTime = deliveryStops.length * 15;
         }
 
         // Add warehouse at start and end
         const warehouseStart = createWarehouseStop(1, true);
         const warehouseEnd = createWarehouseStop(deliveryStops.length + 2, false);
         const stops = [warehouseStart, ...deliveryStops, warehouseEnd];
+
+        // Calculate distance using full route including warehouse if Google didn't provide it
+        if (!googleOptimized && stopsHaveCoords) {
+          totalDistance = calculateRouteDistance(stops);
+          estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (deliveryStops.length * 5) : deliveryStops.length * 15;
+        } else if (!googleOptimized) {
+          estimatedTime = deliveryStops.length * 15;
+        }
 
         const mapsUrl = generateGoogleMapsUrl(stops);
 
