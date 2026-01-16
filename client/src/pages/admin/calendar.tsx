@@ -20,6 +20,7 @@ const DAYS_OF_WEEK_MAP: Record<string, number> = {
 };
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_FULL_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 const ROUTE_COLORS = [
   "bg-blue-500",
@@ -173,7 +174,7 @@ export default function AdminCalendarPage() {
           <div className="grid grid-cols-7 gap-4">
             {weekDays.map((day, index) => {
               const dayName = DAY_NAMES[day.getDay()];
-              const dayKey = dayName.toLowerCase();
+              const dayFullName = DAY_FULL_NAMES[day.getDay()];
               const dayIsToday = isToday(day);
 
               return (
@@ -184,7 +185,7 @@ export default function AdminCalendarPage() {
                       {format(day, "d")}
                     </p>
                   </div>
-                  {renderDayContent(dayKey)}
+                  {renderDayContent(dayFullName)}
                 </div>
               );
             })}
@@ -202,10 +203,10 @@ export default function AdminCalendarPage() {
           <div className="grid grid-cols-7 gap-1">
             {monthDays.map((day, index) => {
               const dayName = DAY_NAMES[day.getDay()];
-              const dayKey = dayName.toLowerCase();
+              const dayFullName = DAY_FULL_NAMES[day.getDay()];
               const dayIsToday = isToday(day);
               const isCurrentMonth = isSameMonth(day, currentDate);
-              const dayRoutes = getRoutesForDay(dayKey);
+              const dayRoutes = getRoutesForDay(dayFullName);
 
               return (
                 <div
