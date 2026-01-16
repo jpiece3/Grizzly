@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import { format } from "date-fns";
-import type { RouteStop, InsertLocation, InsertRoute } from "@shared/schema";
+import type { RouteStop, InsertLocation, InsertRoute, Location } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import {
@@ -17,16 +17,16 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Validation schemas
 const clockInSchema = z.object({
   driverId: z.string().min(1, "Driver ID is required"),
-  lat: z.number("Latitude must be a number"),
-  lng: z.number("Longitude must be a number"),
+  lat: z.number({ message: "Latitude must be a number" }),
+  lng: z.number({ message: "Longitude must be a number" }),
   locationName: z.string().optional(),
 });
 
 const clockOutSchema = z.object({
   driverId: z.string().min(1, "Driver ID is required"),
   entryId: z.string().min(1, "Entry ID is required"),
-  lat: z.number("Latitude must be a number"),
-  lng: z.number("Longitude must be a number"),
+  lat: z.number({ message: "Latitude must be a number" }),
+  lng: z.number({ message: "Longitude must be a number" }),
   locationName: z.string().optional(),
 });
 
@@ -48,6 +48,131 @@ function calculateHaversineDistance(
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c; // Distance in meters
+}
+
+// K-means clustering algorithm for geographic grouping
+function kMeansClustering(locations: Location[], k: number): Location[][] {
+  const validLocations = locations.filter(loc => loc.lat != null && loc.lng != null);
+  
+  if (validLocations.length === 0 || k <= 0) return [];
+  if (k >= validLocations.length) {
+    return validLocations.map(loc => [loc]);
+  }
+
+  // Initialize centroids by selecting k evenly spaced locations
+  const step = Math.floor(validLocations.length / k);
+  let centroids: { lat: number; lng: number }[] = [];
+  for (let i = 0; i < k; i++) {
+    const loc = validLocations[Math.min(i * step, validLocations.length - 1)];
+    centroids.push({ lat: loc.lat!, lng: loc.lng! });
+  }
+
+  let assignments: number[] = new Array(validLocations.length).fill(0);
+  const maxIterations = 20;
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // Assign each location to nearest centroid
+    const newAssignments: number[] = [];
+    for (const loc of validLocations) {
+      let minDist = Infinity;
+      let closestCentroid = 0;
+      for (let c = 0; c < centroids.length; c++) {
+        const dist = calculateHaversineDistance(loc.lat!, loc.lng!, centroids[c].lat, centroids[c].lng);
+        if (dist < minDist) {
+          minDist = dist;
+          closestCentroid = c;
+        }
+      }
+      newAssignments.push(closestCentroid);
+    }
+
+    // Check for convergence
+    const hasConverged = newAssignments.every((a, i) => a === assignments[i]);
+    assignments = newAssignments;
+
+    if (hasConverged) break;
+
+    // Update centroids
+    const newCentroids: { lat: number; lng: number; count: number }[] = 
+      Array.from({ length: k }, () => ({ lat: 0, lng: 0, count: 0 }));
+
+    for (let i = 0; i < validLocations.length; i++) {
+      const cluster = assignments[i];
+      newCentroids[cluster].lat += validLocations[i].lat!;
+      newCentroids[cluster].lng += validLocations[i].lng!;
+      newCentroids[cluster].count++;
+    }
+
+    for (let c = 0; c < k; c++) {
+      if (newCentroids[c].count > 0) {
+        centroids[c] = {
+          lat: newCentroids[c].lat / newCentroids[c].count,
+          lng: newCentroids[c].lng / newCentroids[c].count,
+        };
+      }
+    }
+  }
+
+  // Group locations by cluster
+  const clusters: Location[][] = Array.from({ length: k }, () => []);
+  for (let i = 0; i < validLocations.length; i++) {
+    clusters[assignments[i]].push(validLocations[i]);
+  }
+
+  // Filter out empty clusters
+  return clusters.filter(cluster => cluster.length > 0);
+}
+
+// Nearest-neighbor algorithm for route ordering within a cluster
+function nearestNeighborOrdering<T extends { lat: number | null; lng: number | null }>(locations: T[]): T[] {
+  if (locations.length <= 1) return [...locations];
+
+  const result: T[] = [];
+  const remaining = [...locations];
+
+  // Start with the first location
+  result.push(remaining.shift()!);
+
+  while (remaining.length > 0) {
+    const current = result[result.length - 1];
+    let nearestIdx = 0;
+    let nearestDist = Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const dist = calculateHaversineDistance(
+        current.lat!, current.lng!,
+        remaining[i].lat!, remaining[i].lng!
+      );
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestIdx = i;
+      }
+    }
+
+    result.push(remaining.splice(nearestIdx, 1)[0]);
+  }
+
+  return result;
+}
+
+// Calculate total route distance from ordered stops (returns kilometers with 1 decimal)
+function calculateRouteDistance(stops: RouteStop[]): number | null {
+  if (stops.length < 2) return 0;
+
+  let totalMeters = 0;
+  for (let i = 0; i < stops.length - 1; i++) {
+    const current = stops[i];
+    const next = stops[i + 1];
+
+    if (current.lat == null || current.lng == null || next.lat == null || next.lng == null) {
+      return null; // Cannot calculate if any stop lacks coordinates
+    }
+
+    totalMeters += calculateHaversineDistance(current.lat, current.lng, next.lat, next.lng);
+  }
+
+  // Convert to kilometers and round to 1 decimal place
+  return Math.round((totalMeters / 1000) * 10) / 10;
 }
 
 export async function registerRoutes(
@@ -243,50 +368,103 @@ export async function registerRoutes(
       // Clear existing routes
       await storage.clearRoutes();
 
-      // Divide locations among drivers
-      const stopsPerDriver = Math.ceil(locations.length / driverCount);
+      // Check if locations have coordinates for geographic optimization
+      const locationsWithCoords = locations.filter(loc => loc.lat != null && loc.lng != null);
+      const hasCoordinates = locationsWithCoords.length === locations.length && locations.length > 0;
+
       const createdRoutes: any[] = [];
 
-      for (let i = 0; i < driverCount; i++) {
-        const startIndex = i * stopsPerDriver;
-        const endIndex = Math.min(startIndex + stopsPerDriver, locations.length);
-        
-        if (startIndex >= locations.length) break;
+      if (hasCoordinates) {
+        // Use geographic clustering (K-means) + nearest-neighbor optimization
+        const clusters = kMeansClustering(locations, driverCount);
 
-        const routeLocations = locations.slice(startIndex, endIndex);
-        
-        // Create route stops from locations
-        const stops: RouteStop[] = routeLocations.map((loc, index) => ({
-          id: randomUUID(),
-          locationId: loc.id,
-          address: loc.address,
-          customerName: loc.customerName,
-          serviceType: loc.serviceType || undefined,
-          notes: loc.notes || undefined,
-          lat: loc.lat || undefined,
-          lng: loc.lng || undefined,
-          sequence: index + 1,
-        }));
+        for (const cluster of clusters) {
+          if (cluster.length === 0) continue;
 
-        // Generate Google Maps URL with all stops
-        const mapsUrl = generateGoogleMapsUrl(stops);
+          // Apply nearest-neighbor ordering within each cluster
+          const orderedLocations = nearestNeighborOrdering(cluster);
 
-        // Estimate time (rough estimate: 10 min per stop + 5 min travel between)
-        const estimatedTime = stops.length * 15;
+          // Create route stops with optimized sequence
+          const stops: RouteStop[] = orderedLocations.map((loc, index) => ({
+            id: randomUUID(),
+            locationId: loc.id,
+            address: loc.address,
+            customerName: loc.customerName,
+            serviceType: loc.serviceType || undefined,
+            notes: loc.notes || undefined,
+            lat: loc.lat || undefined,
+            lng: loc.lng || undefined,
+            sequence: index + 1,
+          }));
 
-        const route = await storage.createRoute({
-          date: format(new Date(), "yyyy-MM-dd"),
-          stopsJson: stops,
-          routeLink: mapsUrl,
-          totalDistance: null,
-          estimatedTime,
-          status: "draft",
-          stopCount: stops.length,
-          driverId: null,
-          driverName: null,
-        });
+          // Calculate total distance between consecutive stops (in kilometers)
+          const totalDistance = calculateRouteDistance(stops);
 
-        createdRoutes.push(route);
+          // Generate Google Maps URL with all stops
+          const mapsUrl = generateGoogleMapsUrl(stops);
+
+          // Estimate time (rough estimate: 10 min per stop + 5 min travel between)
+          const estimatedTime = stops.length * 15;
+
+          const route = await storage.createRoute({
+            date: format(new Date(), "yyyy-MM-dd"),
+            stopsJson: stops,
+            routeLink: mapsUrl,
+            totalDistance,
+            estimatedTime,
+            status: "draft",
+            stopCount: stops.length,
+            driverId: null,
+            driverName: null,
+          });
+
+          createdRoutes.push(route);
+        }
+      } else {
+        // Fallback: Simple round-robin division (no coordinates available)
+        const stopsPerDriver = Math.ceil(locations.length / driverCount);
+
+        for (let i = 0; i < driverCount; i++) {
+          const startIndex = i * stopsPerDriver;
+          const endIndex = Math.min(startIndex + stopsPerDriver, locations.length);
+          
+          if (startIndex >= locations.length) break;
+
+          const routeLocations = locations.slice(startIndex, endIndex);
+          
+          // Create route stops from locations
+          const stops: RouteStop[] = routeLocations.map((loc, index) => ({
+            id: randomUUID(),
+            locationId: loc.id,
+            address: loc.address,
+            customerName: loc.customerName,
+            serviceType: loc.serviceType || undefined,
+            notes: loc.notes || undefined,
+            lat: loc.lat || undefined,
+            lng: loc.lng || undefined,
+            sequence: index + 1,
+          }));
+
+          // Generate Google Maps URL with all stops
+          const mapsUrl = generateGoogleMapsUrl(stops);
+
+          // Estimate time (rough estimate: 10 min per stop + 5 min travel between)
+          const estimatedTime = stops.length * 15;
+
+          const route = await storage.createRoute({
+            date: format(new Date(), "yyyy-MM-dd"),
+            stopsJson: stops,
+            routeLink: mapsUrl,
+            totalDistance: null,
+            estimatedTime,
+            status: "draft",
+            stopCount: stops.length,
+            driverId: null,
+            driverName: null,
+          });
+
+          createdRoutes.push(route);
+        }
       }
 
       return res.status(201).json(createdRoutes);

@@ -81,7 +81,7 @@ export function RouteCard({
                   <p className="text-lg font-semibold text-foreground">
                     {route.totalDistance.toFixed(1)}
                   </p>
-                  <p className="text-xs text-muted-foreground">Miles</p>
+                  <p className="text-xs text-muted-foreground">km</p>
                 </div>
               </div>
             )}
