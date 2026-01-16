@@ -41,7 +41,7 @@ A mobile-optimized web application for managing mat delivery driver schedules, G
 2. **Route Management**
    - Auto-generate optimized routes per day using K-means clustering + nearest-neighbor algorithm
    - Google Routes API integration for optimal waypoint ordering
-   - **Routes automatically start and end at the Warehouse** (583 Frederick Road, Catonsville, MD 21228)
+   - **Routes automatically start and end at the Warehouse** (configured in Work Locations, default: 3700 Pennington Ave Baltimore, MD 21226)
    - **Date-specific scheduling**: Routes are generated for specific dates (not recurring weekly)
    - Generate Routes dialog shows next 14 days with actual dates (e.g., "Monday - Jan 20")
    - Interactive Map View with colored markers per route

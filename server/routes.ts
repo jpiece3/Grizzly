@@ -683,16 +683,16 @@ export async function registerRoutes(
     const workLocations = await storage.getAllWorkLocations();
     const warehouse = workLocations.find(wl => wl.name.toLowerCase() === 'warehouse');
     
-    // Create warehouse stop helper
+    // Create warehouse stop helper (default to new warehouse address if not found in database)
     const createWarehouseStop = (sequence: number, isStart: boolean): RouteStop => ({
       id: randomUUID(),
       locationId: warehouse?.id || 'warehouse',
-      address: warehouse?.address || '583 Frederick Road, Catonsville, MD 21228',
+      address: warehouse?.address || '3700 Pennington Ave Baltimore, MD 21226',
       customerName: isStart ? 'Start: Warehouse' : 'End: Warehouse',
       serviceType: undefined,
       notes: isStart ? 'Load truck and begin route' : 'Return to warehouse',
-      lat: warehouse?.lat || 39.27257,
-      lng: warehouse?.lng || -76.7281,
+      lat: warehouse?.lat || 39.23128,
+      lng: warehouse?.lng || -76.58923,
       sequence,
     });
 
@@ -1556,10 +1556,11 @@ export async function registerRoutes(
       const generateGoogleMapsLink = (stops: RouteStop[]) => {
         if (!stops || stops.length === 0) return "No stops";
         
-        // Warehouse as origin and destination
-        const warehouse = "583 Frederick Road, Catonsville, MD 21228";
-        const origin = encodeURIComponent(warehouse);
-        const destination = encodeURIComponent(warehouse);
+        // Get warehouse from work locations (dynamic, not hardcoded)
+        const warehouseLocation = workLocations.find(wl => wl.name.toLowerCase().includes('warehouse'));
+        const warehouseAddress = warehouseLocation?.address || "3700 Pennington Ave Baltimore, MD 21226";
+        const origin = encodeURIComponent(warehouseAddress);
+        const destination = encodeURIComponent(warehouseAddress);
         
         // Stops as waypoints
         const waypoints = stops
