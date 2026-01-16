@@ -519,6 +519,44 @@ export async function registerRoutes(
     }
   });
 
+  // Re-geocode all locations that don't have coordinates
+  app.post("/api/locations/geocode", async (_req: Request, res: Response) => {
+    try {
+      const locations = await storage.getAllLocations();
+      const locationsWithoutCoords = locations.filter(loc => loc.lat == null || loc.lng == null);
+      
+      if (locationsWithoutCoords.length === 0) {
+        return res.json({ message: "All locations already have coordinates", geocoded: 0 });
+      }
+
+      console.log(`Geocoding ${locationsWithoutCoords.length} locations without coordinates...`);
+      
+      let geocodedCount = 0;
+      for (const location of locationsWithoutCoords) {
+        const coords = await geocodeAddress(location.address);
+        if (coords) {
+          await storage.updateLocation(location.id, {
+            lat: coords.lat,
+            lng: coords.lng,
+          });
+          geocodedCount++;
+        }
+        // Add delay to avoid rate limiting
+        await delay(200);
+      }
+
+      console.log(`Geocoding complete: ${geocodedCount}/${locationsWithoutCoords.length} locations geocoded`);
+      return res.json({ 
+        message: `Geocoded ${geocodedCount} out of ${locationsWithoutCoords.length} locations`,
+        geocoded: geocodedCount,
+        total: locationsWithoutCoords.length
+      });
+    } catch (error) {
+      console.error("Geocode locations error:", error);
+      return res.status(500).json({ message: "Failed to geocode locations" });
+    }
+  });
+
   app.post("/api/locations/upload", upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -953,6 +991,72 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Publish routes error:", error);
       return res.status(500).json({ message: "Failed to publish routes" });
+    }
+  });
+
+  // Refresh all route stops with updated coordinates from locations
+  app.post("/api/routes/refresh-coordinates", async (_req: Request, res: Response) => {
+    try {
+      const routes = await storage.getAllRoutes();
+      const locations = await storage.getAllLocations();
+      
+      // Create a lookup map for location coordinates
+      const locationCoords = new Map<string, { lat: number | null; lng: number | null }>();
+      for (const loc of locations) {
+        locationCoords.set(loc.id, { lat: loc.lat, lng: loc.lng });
+      }
+
+      let updatedCount = 0;
+      for (const route of routes) {
+        const stops = (route.stopsJson || []) as RouteStop[];
+        let hasUpdates = false;
+
+        const updatedStops = stops.map(stop => {
+          const coords = locationCoords.get(stop.locationId);
+          if (coords && (stop.lat !== coords.lat || stop.lng !== coords.lng)) {
+            hasUpdates = true;
+            return { ...stop, lat: coords.lat ?? undefined, lng: coords.lng ?? undefined };
+          }
+          return stop;
+        });
+
+        if (hasUpdates) {
+          // Also regenerate the maps URL and recalculate distance/time
+          const mapsUrl = generateGoogleMapsUrl(updatedStops);
+          let totalDistance: number | null = null;
+          let estimatedTime: number | null = null;
+          
+          const stopsHaveCoords = updatedStops.every(s => s.lat != null && s.lng != null);
+          if (stopsHaveCoords) {
+            const googleResult = await optimizeRouteWithGoogle(updatedStops);
+            if (googleResult) {
+              totalDistance = googleResult.totalDistanceKm;
+              estimatedTime = googleResult.estimatedTimeMinutes;
+            } else {
+              totalDistance = calculateRouteDistance(updatedStops);
+              estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (updatedStops.length * 5) : updatedStops.length * 15;
+            }
+          }
+
+          await storage.updateRoute(route.id, {
+            stopsJson: updatedStops,
+            routeLink: mapsUrl,
+            totalDistance,
+            estimatedTime,
+          });
+          updatedCount++;
+        }
+      }
+
+      console.log(`Refreshed coordinates for ${updatedCount} routes`);
+      return res.json({ 
+        message: `Updated ${updatedCount} routes with new coordinates`,
+        updated: updatedCount,
+        total: routes.length
+      });
+    } catch (error) {
+      console.error("Refresh coordinates error:", error);
+      return res.status(500).json({ message: "Failed to refresh route coordinates" });
     }
   });
 
