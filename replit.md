@@ -32,25 +32,37 @@ A mobile-optimized web application for managing mat delivery driver schedules, G
 ## Key Features
 
 ### Admin Dashboard
-1. **Route Management**
+1. **Delivery Stops Management**
    - CSV upload for delivery locations with automatic geocoding
-   - Auto-generate optimized routes using K-means clustering + nearest-neighbor algorithm
+   - Multi-day scheduling per location (assign Mon-Sun toggles)
+   - Locations can be assigned to multiple days (e.g., Tuesday AND Friday)
+   - Search and filter delivery stops
+
+2. **Route Management**
+   - Auto-generate optimized routes per day using K-means clustering + nearest-neighbor algorithm
    - Google Routes API integration for optimal waypoint ordering
+   - Routes are grouped by day of week based on location day assignments
    - Interactive Map View with colored markers per route
    - Move stops up/down within a route or reassign to different drivers
    - Assign drivers to routes
    - Publish routes for drivers to see
 
-2. **Driver Management**
+3. **Calendar View**
+   - Weekly view (default) showing routes per driver per day
+   - Monthly view with route summaries per day
+   - Color-coded routes by driver
+   - Navigation controls (back, forward, today)
+
+4. **Driver Management**
    - Add/remove drivers and admins
    - View all team members
 
-3. **Time Tracking**
+5. **Time Tracking**
    - View all clock in/out entries
    - Export to CSV for payroll
 
-4. **Work Locations**
-   - Configure geofenced locations
+6. **Work Locations**
+   - Configure geofenced locations with auto-geocoding from address
    - Set GPS verification radius (default 100m)
 
 ### Driver Mobile View
@@ -80,6 +92,8 @@ A mobile-optimized web application for managing mat delivery driver schedules, G
 
 ### Locations
 - `GET /api/locations` - Get delivery locations
+- `PATCH /api/locations/:id` - Update location (e.g., daysOfWeek assignments)
+- `DELETE /api/locations/:id` - Delete a location
 - `POST /api/locations/upload` - Upload CSV file
 
 ### Routes
