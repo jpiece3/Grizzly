@@ -34,19 +34,19 @@ export function AdminSidebar() {
             const shouldHighlight = href === "/admin" ? isExactMatch : isActive;
 
             return (
-              <Link key={id} href={href}>
-                <a
-                  data-testid={`sidebar-nav-${id}`}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-all",
-                    shouldHighlight
-                      ? "bg-primary text-primary-foreground"
-                      : "text-sidebar-foreground hover-elevate"
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
-                  {label}
-                </a>
+              <Link
+                key={id}
+                href={href}
+                data-testid={`sidebar-nav-${id}`}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-all",
+                  shouldHighlight
+                    ? "bg-primary text-primary-foreground"
+                    : "text-sidebar-foreground hover-elevate"
+                )}
+              >
+                <Icon className="w-5 h-5" />
+                {label}
               </Link>
             );
           })}

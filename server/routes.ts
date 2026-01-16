@@ -630,14 +630,38 @@ export async function registerRoutes(
       }
 
       // Get all locations
-      const locations = await storage.getAllLocations();
+      const allLocations = await storage.getAllLocations();
       
-      if (locations.length === 0) {
+      if (allLocations.length === 0) {
         return res.status(400).json({ message: "No locations to generate routes from" });
       }
 
-      // Clear existing routes
-      await storage.clearRoutes();
+      // Filter locations by day if specified, or group by day assignments
+      const targetDay = dayOfWeek ? dayOfWeek.toLowerCase() : null;
+      
+      // Get locations that have day assignments
+      let locations: Location[];
+      if (targetDay) {
+        // Filter to only locations assigned to this specific day
+        locations = allLocations.filter(loc => loc.daysOfWeek && loc.daysOfWeek.includes(targetDay));
+        if (locations.length === 0) {
+          return res.status(400).json({ message: `No locations are scheduled for ${dayOfWeek}. Assign days to delivery stops first.` });
+        }
+      } else {
+        // Use all locations that have at least one day assigned
+        locations = allLocations.filter(loc => loc.daysOfWeek && loc.daysOfWeek.length > 0);
+        if (locations.length === 0) {
+          // Fallback: if no days assigned, use all locations
+          locations = allLocations;
+        }
+      }
+
+      // Clear existing routes for the specified day, or all routes if no day specified
+      if (targetDay) {
+        await storage.clearRoutesByDay(targetDay);
+      } else {
+        await storage.clearRoutes();
+      }
 
       // Check if locations have coordinates for geographic optimization
       const locationsWithCoords = locations.filter(loc => loc.lat != null && loc.lng != null);

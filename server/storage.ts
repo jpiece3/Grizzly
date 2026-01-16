@@ -148,6 +148,10 @@ export class DatabaseStorage implements IStorage {
     await db.delete(routes);
   }
 
+  async clearRoutesByDay(dayOfWeek: string): Promise<void> {
+    await db.delete(routes).where(eq(routes.dayOfWeek, dayOfWeek));
+  }
+
   // Time Entries
   async getTimeEntry(id: string): Promise<TimeEntry | undefined> {
     const [entry] = await db.select().from(timeEntries).where(eq(timeEntries.id, id));
