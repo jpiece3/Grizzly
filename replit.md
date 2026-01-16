@@ -120,6 +120,8 @@ UI preferences persist across navigation using localStorage:
 - `POST /api/routes/move-stop` - Move stop from one route to another
 - `POST /api/routes/publish` - Publish all assigned routes
 - `POST /api/routes/unpublish` - Unpublish all published routes (returns to assigned status)
+- `POST /api/routes/unpublish?date=YYYY-MM-DD` - Unpublish routes for a specific date
+- `PATCH /api/routes/:id/unpublish` - Unpublish a single route
 
 ### Config
 - `GET /api/config/maps-key` - Get Google Maps API key for frontend

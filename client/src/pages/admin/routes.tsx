@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
@@ -11,10 +11,17 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Map, Grid, CalendarIcon, Plus, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isToday } from "date-fns";
+import { Map, Grid, CalendarIcon, Plus, MapPin, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isToday, parseISO } from "date-fns";
 import type { Route, Location, User } from "@shared/schema";
 
 const DAYS_OF_WEEK = [
@@ -255,12 +262,30 @@ export default function AdminRoutesPage() {
   });
 
   const unpublishRoutesMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", "/api/routes/unpublish");
+    mutationFn: async (date?: string) => {
+      const url = date ? `/api/routes/unpublish?date=${date}` : "/api/routes/unpublish";
+      return apiRequest("POST", url);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/routes"] });
       toast({ title: "Routes unpublished successfully" });
+    },
+  });
+
+  const unpublishSingleRouteMutation = useMutation({
+    mutationFn: async (routeId: string) => {
+      return apiRequest("PATCH", `/api/routes/${routeId}/unpublish`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/routes"] });
+      toast({ title: "Route unpublished" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to unpublish route",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -294,6 +319,14 @@ export default function AdminRoutesPage() {
   const draftRoutes = filteredRoutes.filter((r) => r.status === "draft");
   const assignedRoutes = filteredRoutes.filter((r) => r.status === "assigned");
   const publishedRoutes = filteredRoutes.filter((r) => r.status === "published");
+
+  // Get unique dates with published routes (for unpublish by date dropdown)
+  const publishedDates = useMemo(() => {
+    const allPublishedRoutes = routes.filter((r) => r.status === "published" && r.date);
+    const dateSet = new Set(allPublishedRoutes.map((r) => r.date));
+    const uniqueDates = Array.from(dateSet) as string[];
+    return uniqueDates.sort();
+  }, [routes]);
 
   // Count routes by day for the tabs
   const routeCountByDay = DAYS_OF_WEEK.reduce((acc, day) => {
@@ -430,14 +463,40 @@ export default function AdminRoutesPage() {
                   </Button>
                 )}
                 {publishedRoutes.length > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={() => unpublishRoutesMutation.mutate()}
-                    disabled={unpublishRoutesMutation.isPending}
-                    data-testid="button-unpublish-routes"
-                  >
-                    Unpublish All Routes
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        disabled={unpublishRoutesMutation.isPending}
+                        data-testid="button-unpublish-routes"
+                      >
+                        Unpublish
+                        <ChevronDown className="w-4 h-4 ml-2" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => unpublishRoutesMutation.mutate(undefined)}
+                        data-testid="menu-unpublish-all"
+                      >
+                        Unpublish All Routes
+                      </DropdownMenuItem>
+                      {publishedDates.length > 0 && (
+                        <>
+                          <DropdownMenuSeparator />
+                          {publishedDates.map((date) => (
+                            <DropdownMenuItem
+                              key={date}
+                              onClick={() => unpublishRoutesMutation.mutate(date)}
+                              data-testid={`menu-unpublish-date-${date}`}
+                            >
+                              Unpublish {format(parseISO(date), "MMM d, yyyy")}
+                            </DropdownMenuItem>
+                          ))}
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             </div>
@@ -450,6 +509,7 @@ export default function AdminRoutesPage() {
                     route={route}
                     onAssign={() => handleAssign(route)}
                     onDelete={() => deleteRouteMutation.mutate(route.id)}
+                    onUnpublish={() => unpublishSingleRouteMutation.mutate(route.id)}
                   />
                 ))}
               </div>
@@ -487,6 +547,7 @@ export default function AdminRoutesPage() {
                     key={route.id}
                     route={route}
                     onDelete={() => deleteRouteMutation.mutate(route.id)}
+                    onUnpublish={() => unpublishSingleRouteMutation.mutate(route.id)}
                   />
                 ))}
               </div>

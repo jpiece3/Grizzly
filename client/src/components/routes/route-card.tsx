@@ -1,4 +1,4 @@
-import { MapPin, Clock, Navigation, GripVertical, User, ChevronRight, Calendar, Trash2 } from "lucide-react";
+import { MapPin, Clock, Navigation, GripVertical, User, ChevronRight, Calendar, Trash2, RotateCcw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ interface RouteCardProps {
   onEdit?: () => void;
   onAssign?: () => void;
   onDelete?: () => void;
+  onUnpublish?: () => void;
   isDragging?: boolean;
   showDragHandle?: boolean;
 }
@@ -20,6 +21,7 @@ export function RouteCard({
   onEdit, 
   onAssign, 
   onDelete,
+  onUnpublish,
   isDragging,
   showDragHandle = false 
 }: RouteCardProps) {
@@ -163,6 +165,18 @@ export function RouteCard({
                 data-testid={`button-assign-route-${route.id}`}
               >
                 Assign Driver
+              </Button>
+            )}
+            {onUnpublish && route.status === "published" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onUnpublish}
+                className="flex-1"
+                data-testid={`button-unpublish-route-${route.id}`}
+              >
+                <RotateCcw className="w-4 h-4 mr-1" />
+                Unpublish
               </Button>
             )}
             {route.routeLink && (

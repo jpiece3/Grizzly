@@ -1076,20 +1076,52 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/routes/unpublish", async (_req: Request, res: Response) => {
+  app.post("/api/routes/unpublish", async (req: Request, res: Response) => {
     try {
+      const { date } = req.query;
       const routes = await storage.getAllRoutes();
+      let unpublishedCount = 0;
       
       for (const route of routes) {
         if (route.status === "published") {
+          // If date is provided, only unpublish routes for that date
+          if (date && route.date !== date) {
+            continue;
+          }
           await storage.updateRoute(route.id, { status: "assigned" });
+          unpublishedCount++;
         }
       }
 
-      return res.json({ message: "Routes unpublished successfully" });
+      return res.json({ 
+        message: `${unpublishedCount} route(s) unpublished successfully`,
+        count: unpublishedCount 
+      });
     } catch (error) {
       console.error("Unpublish routes error:", error);
       return res.status(500).json({ message: "Failed to unpublish routes" });
+    }
+  });
+
+  // Unpublish a single route
+  app.patch("/api/routes/:id/unpublish", async (req: Request, res: Response) => {
+    try {
+      const routeId = req.params.id;
+      const route = await storage.getRoute(routeId);
+      
+      if (!route) {
+        return res.status(404).json({ message: "Route not found" });
+      }
+      
+      if (route.status !== "published") {
+        return res.status(400).json({ message: "Route is not published" });
+      }
+      
+      const updatedRoute = await storage.updateRoute(routeId, { status: "assigned" });
+      return res.json(updatedRoute);
+    } catch (error) {
+      console.error("Unpublish route error:", error);
+      return res.status(500).json({ message: "Failed to unpublish route" });
     }
   });
 
