@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Loader2, Route } from "lucide-react";
+import { format, addDays, startOfWeek } from "date-fns";
 
 interface GenerateRoutesDialogProps {
   open: boolean;
@@ -26,15 +27,7 @@ interface GenerateRoutesDialogProps {
   defaultDay?: string;
 }
 
-const DAYS_OF_WEEK = [
-  { value: "monday", label: "Monday" },
-  { value: "tuesday", label: "Tuesday" },
-  { value: "wednesday", label: "Wednesday" },
-  { value: "thursday", label: "Thursday" },
-  { value: "friday", label: "Friday" },
-  { value: "saturday", label: "Saturday" },
-  { value: "sunday", label: "Sunday" },
-];
+const DAY_VALUES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 export function GenerateRoutesDialog({
   open,
@@ -46,6 +39,30 @@ export function GenerateRoutesDialog({
 }: GenerateRoutesDialogProps) {
   const [driverCount, setDriverCount] = useState<string>("2");
   const [dayOfWeek, setDayOfWeek] = useState<string>(defaultDay || "monday");
+
+  // Build days with their next occurrence dates
+  const daysWithDates = useMemo(() => {
+    const today = new Date();
+    const weekStart = startOfWeek(today, { weekStartsOn: 0 }); // Sunday
+    
+    return DAY_VALUES.map((dayValue, index) => {
+      // Get the date for this day in the current week
+      let dayDate = addDays(weekStart, index);
+      
+      // If the day has passed, show next week's date
+      if (dayDate < today) {
+        dayDate = addDays(dayDate, 7);
+      }
+      
+      const dayName = dayValue.charAt(0).toUpperCase() + dayValue.slice(1);
+      const dateStr = format(dayDate, "MMM d");
+      
+      return {
+        value: dayValue,
+        label: `${dayName} - ${dateStr}`,
+      };
+    });
+  }, []);
 
   // Sync dayOfWeek state when defaultDay changes or dialog opens
   useEffect(() => {
@@ -81,7 +98,7 @@ export function GenerateRoutesDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {DAYS_OF_WEEK.map((day) => (
+                {daysWithDates.map((day) => (
                   <SelectItem key={day.value} value={day.value}>
                     {day.label}
                   </SelectItem>
