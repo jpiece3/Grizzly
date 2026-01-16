@@ -33,8 +33,11 @@ A mobile-optimized web application for managing mat delivery driver schedules, G
 
 ### Admin Dashboard
 1. **Route Management**
-   - CSV upload for delivery locations
-   - Auto-generate optimized routes for multiple drivers
+   - CSV upload for delivery locations with automatic geocoding
+   - Auto-generate optimized routes using K-means clustering + nearest-neighbor algorithm
+   - Google Routes API integration for optimal waypoint ordering
+   - Interactive Map View with colored markers per route
+   - Move stops up/down within a route or reassign to different drivers
    - Assign drivers to routes
    - Publish routes for drivers to see
 
@@ -83,7 +86,12 @@ A mobile-optimized web application for managing mat delivery driver schedules, G
 - `GET /api/routes` - Get all routes (optional: ?driverId=)
 - `POST /api/routes/generate` - Generate routes from locations
 - `PATCH /api/routes/:id/assign` - Assign driver to route
+- `PATCH /api/routes/:id/stops` - Update stop order within a route
+- `POST /api/routes/move-stop` - Move stop from one route to another
 - `POST /api/routes/publish` - Publish all assigned routes
+
+### Config
+- `GET /api/config/maps-key` - Get Google Maps API key for frontend
 
 ### Time Entries
 - `GET /api/time-entries` - Get all entries
