@@ -12,14 +12,60 @@ interface Message {
   content: string;
 }
 
+const MAX_PERSISTED_MESSAGES = 50;
+
 export function AIChat() {
   const { user } = useAuthContext();
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [isOpen, setIsOpen] = useState(() => {
+    // Initialize from localStorage (with SSR guard)
+    if (typeof window === "undefined") return false;
+    try {
+      const saved = localStorage.getItem("ai-chat-open");
+      return saved === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [messages, setMessages] = useState<Message[]>(() => {
+    // Initialize messages from localStorage (with SSR guard)
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = localStorage.getItem("ai-chat-messages");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Cap to last N messages on load
+        return Array.isArray(parsed) ? parsed.slice(-MAX_PERSISTED_MESSAGES) : [];
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Persist chat open state to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("ai-chat-open", String(isOpen));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [isOpen]);
+
+  // Persist messages to localStorage (capped to prevent storage overflow)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const toStore = messages.slice(-MAX_PERSISTED_MESSAGES);
+      localStorage.setItem("ai-chat-messages", JSON.stringify(toStore));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -66,28 +112,41 @@ export function AIChat() {
     }
   };
 
-  const parseInlineElements = (text: string, keyPrefix: string) => {
+  const parseInlineElements = (text: string, keyPrefix: string): (string | JSX.Element)[] => {
     const parts: (string | JSX.Element)[] = [];
-    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    // Combined regex for links and bold text
+    const inlineRegex = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*/g;
     let lastIndex = 0;
     let match;
     let partIndex = 0;
 
-    while ((match = linkRegex.exec(text)) !== null) {
+    while ((match = inlineRegex.exec(text)) !== null) {
       if (match.index > lastIndex) {
         parts.push(text.slice(lastIndex, match.index));
       }
-      parts.push(
-        <a
-          key={`${keyPrefix}-link-${partIndex++}`}
-          href={match[2]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline hover:text-primary/80 break-all"
-        >
-          {match[1]}
-        </a>
-      );
+      
+      if (match[1] && match[2]) {
+        // Link: [text](url)
+        parts.push(
+          <a
+            key={`${keyPrefix}-link-${partIndex++}`}
+            href={match[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline hover:text-primary/80 break-all"
+          >
+            {match[1]}
+          </a>
+        );
+      } else if (match[3]) {
+        // Bold: **text**
+        parts.push(
+          <strong key={`${keyPrefix}-bold-${partIndex++}`} className="font-semibold">
+            {match[3]}
+          </strong>
+        );
+      }
+      
       lastIndex = match.index + match[0].length;
     }
 
@@ -95,35 +154,60 @@ export function AIChat() {
       parts.push(text.slice(lastIndex));
     }
 
-    return parts.length > 0 ? parts : text;
+    return parts.length > 0 ? parts : [text];
   };
 
   const formatMessage = (content: string) => {
     const lines = content.split("\n");
-    return lines.map((line, i) => {
+    const elements: JSX.Element[] = [];
+    let currentList: { type: "ul" | "ol"; items: JSX.Element[] } | null = null;
+    
+    const flushList = () => {
+      if (currentList) {
+        const ListTag = currentList.type === "ul" ? "ul" : "ol";
+        elements.push(
+          <ListTag key={`list-${elements.length}`} className={`ml-4 text-sm ${currentList.type === "ul" ? "list-disc" : "list-decimal"} space-y-0.5`}>
+            {currentList.items}
+          </ListTag>
+        );
+        currentList = null;
+      }
+    };
+    
+    lines.forEach((line, i) => {
       if (line.startsWith("# ")) {
-        return <h2 key={i} className="text-lg font-bold mt-2 mb-1">{parseInlineElements(line.slice(2), `h2-${i}`)}</h2>;
+        flushList();
+        elements.push(<h2 key={i} className="text-lg font-bold mt-2 mb-1">{parseInlineElements(line.slice(2), `h2-${i}`)}</h2>);
+      } else if (line.startsWith("## ")) {
+        flushList();
+        elements.push(<h3 key={i} className="text-base font-semibold mt-2 mb-1">{parseInlineElements(line.slice(3), `h3-${i}`)}</h3>);
+      } else if (line.startsWith("### ")) {
+        flushList();
+        elements.push(<h4 key={i} className="text-sm font-semibold mt-1 mb-1">{parseInlineElements(line.slice(4), `h4-${i}`)}</h4>);
+      } else if (line.startsWith("- ") || line.startsWith("* ")) {
+        if (!currentList || currentList.type !== "ul") {
+          flushList();
+          currentList = { type: "ul", items: [] };
+        }
+        const bulletText = line.slice(2);
+        currentList.items.push(<li key={i}>{parseInlineElements(bulletText, `li-${i}`)}</li>);
+      } else if (line.match(/^\d+\.\s/)) {
+        if (!currentList || currentList.type !== "ol") {
+          flushList();
+          currentList = { type: "ol", items: [] };
+        }
+        currentList.items.push(<li key={i}>{parseInlineElements(line.replace(/^\d+\.\s/, ""), `ol-${i}`)}</li>);
+      } else if (line.trim() === "") {
+        flushList();
+        elements.push(<br key={i} />);
+      } else {
+        flushList();
+        elements.push(<p key={i} className="text-sm">{parseInlineElements(line, `p-${i}`)}</p>);
       }
-      if (line.startsWith("## ")) {
-        return <h3 key={i} className="text-base font-semibold mt-2 mb-1">{parseInlineElements(line.slice(3), `h3-${i}`)}</h3>;
-      }
-      if (line.startsWith("### ")) {
-        return <h4 key={i} className="text-sm font-semibold mt-1 mb-1">{parseInlineElements(line.slice(4), `h4-${i}`)}</h4>;
-      }
-      if (line.startsWith("- ")) {
-        return <li key={i} className="ml-4 text-sm">{parseInlineElements(line.slice(2), `li-${i}`)}</li>;
-      }
-      if (line.match(/^\d+\.\s/)) {
-        return <li key={i} className="ml-4 text-sm list-decimal">{parseInlineElements(line.replace(/^\d+\.\s/, ""), `ol-${i}`)}</li>;
-      }
-      if (line.startsWith("**") && line.endsWith("**")) {
-        return <p key={i} className="font-semibold text-sm">{parseInlineElements(line.slice(2, -2), `bold-${i}`)}</p>;
-      }
-      if (line.trim() === "") {
-        return <br key={i} />;
-      }
-      return <p key={i} className="text-sm">{parseInlineElements(line, `p-${i}`)}</p>;
     });
+    
+    flushList();
+    return elements;
   };
 
   const handleSuggestionClick = (suggestion: string) => {

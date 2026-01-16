@@ -1917,12 +1917,14 @@ export async function registerRoutes(
       }
 
       // Gather current app data for context
-      const [users, locations, routes, timeEntries, workLocations] = await Promise.all([
+      const [users, locations, routes, timeEntries, workLocations, materials, locationMaterials] = await Promise.all([
         storage.getAllUsers(),
         storage.getAllLocations(),
         storage.getAllRoutes(),
         storage.getAllTimeEntries(),
         storage.getAllWorkLocations(),
+        storage.getAllMaterials(),
+        storage.getAllLocationMaterials(),
       ]);
 
       const drivers = users.filter(u => u.role === "driver");
@@ -2040,6 +2042,28 @@ ${workLocations.map(wl => `- ${wl.name}: ${wl.address} (radius: ${wl.radiusMeter
 ### Time Tracking
 - Total time entries: ${timeEntries.length}
 - Today's entries: ${timeEntries.filter(te => te.date === format(new Date(), "yyyy-MM-dd")).length}
+
+### Materials Inventory
+- Total materials: ${materials.length}
+${materials.map(m => `- ${m.name}${m.category ? ` (${m.category})` : ""}`).join("\n") || "None configured"}
+
+### Location Material Assignments
+- Total assignments: ${locationMaterials.length}
+${(() => {
+  // Group by location
+  const byLocation = locationMaterials.reduce((acc, lm) => {
+    const location = locations.find(l => l.id === lm.locationId);
+    const material = materials.find(m => m.id === lm.materialId);
+    const key = location?.customerName || lm.locationId;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push({ material: material?.name || "Unknown", quantity: lm.quantity || 1 });
+    return acc;
+  }, {} as Record<string, Array<{ material: string; quantity: number }>>);
+  
+  return Object.entries(byLocation)
+    .map(([loc, mats]) => `- ${loc}: ${mats.map(m => `${m.material} (qty: ${m.quantity})`).join(", ")}`)
+    .join("\n") || "None assigned";
+})()}
 `;
 
       const systemPrompt = `You are a helpful AI assistant for the Grizzly Mats Driver Management App. You help administrators understand how to use the app and answer questions about their data.
@@ -2050,6 +2074,8 @@ ${workLocations.map(wl => `- ${wl.name}: ${wl.address} (radius: ${wl.radiusMeter
 3. Help troubleshoot common issues
 4. Give recommendations for route management and scheduling
 5. Provide detailed route information including all stops and Google Maps links for navigation
+6. Answer questions about materials inventory and which materials are assigned to each location
+7. Provide information about drivers, their assigned routes, and time tracking entries
 
 ## Guidelines:
 - Be concise but helpful

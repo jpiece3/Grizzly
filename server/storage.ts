@@ -85,6 +85,7 @@ export interface IStorage {
 
   // Location Materials
   getLocationMaterials(locationId: string): Promise<LocationMaterialWithDetails[]>;
+  getAllLocationMaterials(): Promise<LocationMaterial[]>;
   addLocationMaterial(data: InsertLocationMaterial): Promise<LocationMaterial>;
   updateLocationMaterial(id: string, data: Partial<InsertLocationMaterial>): Promise<LocationMaterial>;
   removeLocationMaterial(id: string): Promise<void>;
@@ -315,6 +316,7 @@ export class DatabaseStorage implements IStorage {
         id: materials.id,
         name: materials.name,
         category: materials.category,
+        stockQuantity: materials.stockQuantity,
       },
     })
     .from(locationMaterials)
@@ -329,6 +331,10 @@ export class DatabaseStorage implements IStorage {
       daysOfWeek: r.daysOfWeek,
       material: r.material || undefined,
     }));
+  }
+
+  async getAllLocationMaterials(): Promise<LocationMaterial[]> {
+    return db.select().from(locationMaterials);
   }
 
   async addLocationMaterial(data: InsertLocationMaterial): Promise<LocationMaterial> {
