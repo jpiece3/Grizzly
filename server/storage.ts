@@ -5,6 +5,8 @@ import {
   timeEntries,
   workLocations,
   routeConfirmations,
+  materials,
+  locationMaterials,
   type User,
   type InsertUser,
   type Location,
@@ -17,6 +19,11 @@ import {
   type InsertWorkLocation,
   type RouteConfirmation,
   type InsertRouteConfirmation,
+  type Material,
+  type InsertMaterial,
+  type LocationMaterial,
+  type InsertLocationMaterial,
+  type LocationMaterialWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
@@ -67,6 +74,19 @@ export interface IStorage {
   upsertRouteConfirmation(confirmation: InsertRouteConfirmation): Promise<RouteConfirmation>;
   deleteRouteConfirmationsByDate(scheduledDate: string): Promise<void>;
   getExcludedLocationIdsByDate(scheduledDate: string): Promise<string[]>;
+
+  // Materials
+  getMaterial(id: string): Promise<Material | undefined>;
+  getAllMaterials(): Promise<Material[]>;
+  createMaterial(material: InsertMaterial): Promise<Material>;
+  updateMaterial(id: string, data: Partial<InsertMaterial>): Promise<Material>;
+  deleteMaterial(id: string): Promise<void>;
+
+  // Location Materials
+  getLocationMaterials(locationId: string): Promise<LocationMaterialWithDetails[]>;
+  addLocationMaterial(data: InsertLocationMaterial): Promise<LocationMaterial>;
+  removeLocationMaterial(id: string): Promise<void>;
+  removeAllLocationMaterials(locationId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -250,6 +270,71 @@ export class DatabaseStorage implements IStorage {
         eq(routeConfirmations.excluded, true)
       ));
     return excluded.map(e => e.locationId);
+  }
+
+  // Materials
+  async getMaterial(id: string): Promise<Material | undefined> {
+    const [material] = await db.select().from(materials).where(eq(materials.id, id));
+    return material || undefined;
+  }
+
+  async getAllMaterials(): Promise<Material[]> {
+    return db.select().from(materials).orderBy(materials.name);
+  }
+
+  async createMaterial(insertMaterial: InsertMaterial): Promise<Material> {
+    const [material] = await db.insert(materials).values(insertMaterial).returning();
+    return material;
+  }
+
+  async updateMaterial(id: string, data: Partial<InsertMaterial>): Promise<Material> {
+    const [material] = await db.update(materials).set(data).where(eq(materials.id, id)).returning();
+    return material;
+  }
+
+  async deleteMaterial(id: string): Promise<void> {
+    await db.delete(materials).where(eq(materials.id, id));
+  }
+
+  // Location Materials
+  async getLocationMaterials(locationId: string): Promise<LocationMaterialWithDetails[]> {
+    const results = await db.select({
+      id: locationMaterials.id,
+      locationId: locationMaterials.locationId,
+      materialId: locationMaterials.materialId,
+      quantity: locationMaterials.quantity,
+      daysOfWeek: locationMaterials.daysOfWeek,
+      material: {
+        id: materials.id,
+        name: materials.name,
+        category: materials.category,
+      },
+    })
+    .from(locationMaterials)
+    .leftJoin(materials, eq(locationMaterials.materialId, materials.id))
+    .where(eq(locationMaterials.locationId, locationId));
+    
+    return results.map(r => ({
+      id: r.id,
+      locationId: r.locationId,
+      materialId: r.materialId,
+      quantity: r.quantity,
+      daysOfWeek: r.daysOfWeek,
+      material: r.material || undefined,
+    }));
+  }
+
+  async addLocationMaterial(data: InsertLocationMaterial): Promise<LocationMaterial> {
+    const [lm] = await db.insert(locationMaterials).values(data).returning();
+    return lm;
+  }
+
+  async removeLocationMaterial(id: string): Promise<void> {
+    await db.delete(locationMaterials).where(eq(locationMaterials.id, id));
+  }
+
+  async removeAllLocationMaterials(locationId: string): Promise<void> {
+    await db.delete(locationMaterials).where(eq(locationMaterials.locationId, locationId));
   }
 }
 

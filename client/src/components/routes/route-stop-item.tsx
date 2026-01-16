@@ -8,6 +8,7 @@ interface RouteStopItemProps {
   isDragging?: boolean;
   showDragHandle?: boolean;
   onClick?: () => void;
+  onCustomerClick?: (stop: RouteStop) => void;
   isCompact?: boolean;
 }
 
@@ -17,6 +18,7 @@ export function RouteStopItem({
   isDragging,
   showDragHandle = false,
   onClick,
+  onCustomerClick,
   isCompact = false,
 }: RouteStopItemProps) {
   return (
@@ -49,8 +51,16 @@ export function RouteStopItem({
         <p
           className={cn(
             "font-medium text-foreground truncate",
-            isCompact ? "text-sm" : "text-[17px]"
+            isCompact ? "text-sm" : "text-[17px]",
+            onCustomerClick && "cursor-pointer hover:text-primary transition-colors"
           )}
+          onClick={(e) => {
+            if (onCustomerClick) {
+              e.stopPropagation();
+              onCustomerClick(stop);
+            }
+          }}
+          data-testid={`customer-name-${stop.id}`}
         >
           {stop.customerName}
         </p>

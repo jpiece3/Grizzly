@@ -12,6 +12,7 @@ interface RouteCardProps {
   onAssign?: () => void;
   onDelete?: () => void;
   onUnpublish?: () => void;
+  onCustomerClick?: (stop: RouteStop) => void;
   isDragging?: boolean;
   showDragHandle?: boolean;
 }
@@ -22,6 +23,7 @@ export function RouteCard({
   onAssign, 
   onDelete,
   onUnpublish,
+  onCustomerClick,
   isDragging,
   showDragHandle = false 
 }: RouteCardProps) {
@@ -128,7 +130,14 @@ export function RouteCard({
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
+                    <p 
+                      className={cn(
+                        "text-sm font-medium text-foreground truncate",
+                        onCustomerClick && "cursor-pointer hover:text-primary transition-colors"
+                      )}
+                      onClick={() => onCustomerClick?.(stop)}
+                      data-testid={`customer-name-${stop.id}`}
+                    >
                       {stop.customerName}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">

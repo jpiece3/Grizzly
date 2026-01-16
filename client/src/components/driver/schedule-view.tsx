@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthContext } from "@/context/auth-context";
 import { RouteStopItem } from "@/components/routes/route-stop-item";
+import { CustomerDetailDialog } from "@/components/customer/customer-detail-dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,13 @@ function formatDayOfWeek(day: string | null | undefined): string {
 export function DriverScheduleView() {
   const { user } = useAuthContext();
   const todayDayOfWeek = getCurrentDayOfWeek();
+  const [selectedStop, setSelectedStop] = useState<RouteStop | null>(null);
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
+
+  const handleCustomerClick = (stop: RouteStop) => {
+    setSelectedStop(stop);
+    setShowCustomerDialog(true);
+  };
 
   const { data: routes = [], isLoading } = useQuery<Route[]>({
     queryKey: ["/api/routes", "driver", user?.id],
@@ -100,10 +109,24 @@ export function DriverScheduleView() {
 
         <div className="space-y-3">
           {stops.map((stop, index) => (
-            <RouteStopItem key={stop.id} stop={stop} index={index} />
+            <RouteStopItem 
+              key={stop.id} 
+              stop={stop} 
+              index={index}
+              onCustomerClick={handleCustomerClick}
+            />
           ))}
         </div>
       </Card>
+
+      <CustomerDetailDialog
+        open={showCustomerDialog}
+        onOpenChange={setShowCustomerDialog}
+        locationId={selectedStop?.locationId || null}
+        customerName={selectedStop?.customerName}
+        address={selectedStop?.address}
+        isAdmin={false}
+      />
     </div>
   );
 }

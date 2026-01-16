@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Map, Users, Clock, MapPin, LogOut, Package, Calendar, ClipboardCheck } from "lucide-react";
+import { Map, Users, Clock, MapPin, LogOut, Package, Calendar, ClipboardCheck, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthContext } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ const navItems = [
   { id: "drivers", label: "Drivers", Icon: Users, href: "/admin/drivers" },
   { id: "time-tracking", label: "Time Tracking", Icon: Clock, href: "/admin/time-tracking" },
   { id: "locations", label: "Work Locations", Icon: MapPin, href: "/admin/locations" },
+  { id: "materials", label: "Materials", Icon: Layers, href: "/admin/materials" },
 ];
 
 export function AdminSidebar() {

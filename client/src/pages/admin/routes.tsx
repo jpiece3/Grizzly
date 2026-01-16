@@ -22,7 +22,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Map, Grid, CalendarIcon, Plus, MapPin, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isToday, parseISO } from "date-fns";
-import type { Route, Location, User } from "@shared/schema";
+import type { Route, Location, User, RouteStop } from "@shared/schema";
+import { CustomerDetailDialog } from "@/components/customer/customer-detail-dialog";
 
 const DAYS_OF_WEEK = [
   { value: "monday", label: "Mon" },
@@ -170,6 +171,8 @@ function CalendarView({ routes, drivers, calendarDate, onDateChange, onAssign }:
 export default function AdminRoutesPage() {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [selectedStop, setSelectedStop] = useState<RouteStop | null>(null);
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "map" | "calendar">(() => {
     const saved = localStorage.getItem("routes_viewMode");
     if (saved === "map") return "map";
@@ -309,6 +312,11 @@ export default function AdminRoutesPage() {
   const handleAssign = (route: Route) => {
     setSelectedRoute(route);
     setShowAssignDialog(true);
+  };
+
+  const handleCustomerClick = (stop: RouteStop) => {
+    setSelectedStop(stop);
+    setShowCustomerDialog(true);
   };
 
   // Filter routes by selected day
@@ -510,6 +518,7 @@ export default function AdminRoutesPage() {
                     onAssign={() => handleAssign(route)}
                     onDelete={() => deleteRouteMutation.mutate(route.id)}
                     onUnpublish={() => unpublishSingleRouteMutation.mutate(route.id)}
+                    onCustomerClick={handleCustomerClick}
                   />
                 ))}
               </div>
@@ -523,6 +532,7 @@ export default function AdminRoutesPage() {
                   route={route}
                   onAssign={() => handleAssign(route)}
                   onDelete={() => deleteRouteMutation.mutate(route.id)}
+                  onCustomerClick={handleCustomerClick}
                 />
               ))}
             </div>
@@ -535,6 +545,7 @@ export default function AdminRoutesPage() {
                   key={route.id}
                   route={route}
                   onDelete={() => deleteRouteMutation.mutate(route.id)}
+                  onCustomerClick={handleCustomerClick}
                 />
               ))}
             </div>
@@ -548,6 +559,7 @@ export default function AdminRoutesPage() {
                     route={route}
                     onDelete={() => deleteRouteMutation.mutate(route.id)}
                     onUnpublish={() => unpublishSingleRouteMutation.mutate(route.id)}
+                    onCustomerClick={handleCustomerClick}
                   />
                 ))}
               </div>
@@ -565,6 +577,15 @@ export default function AdminRoutesPage() {
           assignDriverMutation.mutate({ routeId, driverId, driverName })
         }
         isLoading={assignDriverMutation.isPending}
+      />
+
+      <CustomerDetailDialog
+        open={showCustomerDialog}
+        onOpenChange={setShowCustomerDialog}
+        locationId={selectedStop?.locationId || null}
+        customerName={selectedStop?.customerName}
+        address={selectedStop?.address}
+        isAdmin={true}
       />
     </AdminLayout>
   );

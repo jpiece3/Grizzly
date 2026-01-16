@@ -75,6 +75,22 @@ export const routeConfirmations = pgTable("route_confirmations", {
   confirmedAt: timestamp("confirmed_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
+// Materials table - stores material/service types library
+export const materials = pgTable("materials", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  category: text("category"), // optional category for grouping (e.g., "Mats", "Paper Products")
+});
+
+// Location-Material junction table - links materials to locations
+export const locationMaterials = pgTable("location_materials", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  locationId: varchar("location_id").notNull().references(() => locations.id, { onDelete: "cascade" }),
+  materialId: varchar("material_id").notNull().references(() => materials.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").default(1),
+  daysOfWeek: text("days_of_week").array(), // For future day-specific support, null means all days
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   routes: many(routes),
@@ -100,6 +116,26 @@ export const routeConfirmationsRelations = relations(routeConfirmations, ({ one 
     fields: [routeConfirmations.locationId],
     references: [locations.id],
   }),
+}));
+
+export const materialsRelations = relations(materials, ({ many }) => ({
+  locationMaterials: many(locationMaterials),
+}));
+
+export const locationMaterialsRelations = relations(locationMaterials, ({ one }) => ({
+  location: one(locations, {
+    fields: [locationMaterials.locationId],
+    references: [locations.id],
+  }),
+  material: one(materials, {
+    fields: [locationMaterials.materialId],
+    references: [materials.id],
+  }),
+}));
+
+export const locationsRelations = relations(locations, ({ many }) => ({
+  locationMaterials: many(locationMaterials),
+  routeConfirmations: many(routeConfirmations),
 }));
 
 // Types for route stops
@@ -132,6 +168,8 @@ export const insertRouteSchema = createInsertSchema(routes).omit({ id: true });
 export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({ id: true });
 export const insertWorkLocationSchema = createInsertSchema(workLocations).omit({ id: true });
 export const insertRouteConfirmationSchema = createInsertSchema(routeConfirmations).omit({ id: true });
+export const insertMaterialSchema = createInsertSchema(materials).omit({ id: true });
+export const insertLocationMaterialSchema = createInsertSchema(locationMaterials).omit({ id: true });
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -151,6 +189,17 @@ export type WorkLocation = typeof workLocations.$inferSelect;
 
 export type InsertRouteConfirmation = z.infer<typeof insertRouteConfirmationSchema>;
 export type RouteConfirmation = typeof routeConfirmations.$inferSelect;
+
+export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
+export type Material = typeof materials.$inferSelect;
+
+export type InsertLocationMaterial = z.infer<typeof insertLocationMaterialSchema>;
+export type LocationMaterial = typeof locationMaterials.$inferSelect;
+
+// Extended type for location materials with material details
+export interface LocationMaterialWithDetails extends LocationMaterial {
+  material?: Material;
+}
 
 // API response types
 export interface RouteWithDriver extends Route {

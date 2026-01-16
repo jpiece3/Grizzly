@@ -10,6 +10,8 @@ import { z } from "zod";
 import {
   insertUserSchema,
   insertWorkLocationSchema,
+  insertMaterialSchema,
+  insertLocationMaterialSchema,
 } from "@shared/schema";
 import OpenAI from "openai";
 import * as fs from "fs";
@@ -634,9 +636,65 @@ export async function registerRoutes(
       await storage.clearRoutes();
       const createdLocations = await storage.createLocations(geocodedLocations);
 
+      // Process materials from CSV if present
+      let materialsProcessed = 0;
+      const existingMaterials = await storage.getAllMaterials();
+      const materialNameToId = new Map(existingMaterials.map(m => [m.name.toLowerCase(), m.id]));
+
+      // Create a map of address+customerName -> location for deterministic matching
+      const locationKeyToId = new Map<string, string>();
+      for (const loc of createdLocations) {
+        const key = `${loc.address.toLowerCase()}|${loc.customerName.toLowerCase()}`;
+        locationKeyToId.set(key, loc.id);
+      }
+
+      for (const row of records) {
+        const rowAddress = row.address || row.Address || "";
+        const rowCustomerName = row.customer_name || row.customerName || row["Customer Name"] || "";
+        const rowKey = `${rowAddress.toLowerCase()}|${rowCustomerName.toLowerCase()}`;
+        const locationId = locationKeyToId.get(rowKey);
+        
+        const materialsStr = row.materials || row.Materials || "";
+        
+        if (materialsStr && locationId) {
+          const materialNames = materialsStr.split(",").map((m: string) => m.trim()).filter((m: string) => m);
+          
+          // Get existing materials for this location to avoid duplicates
+          const existingLocationMaterials = await storage.getLocationMaterials(locationId);
+          const existingMaterialIds = new Set(existingLocationMaterials.map(lm => lm.materialId));
+          
+          for (const materialName of materialNames) {
+            let materialId = materialNameToId.get(materialName.toLowerCase());
+            
+            if (!materialId) {
+              const newMaterial = await storage.createMaterial({ name: materialName, category: null });
+              materialId = newMaterial.id;
+              materialNameToId.set(materialName.toLowerCase(), materialId);
+            }
+            
+            // Skip if already assigned
+            if (existingMaterialIds.has(materialId)) continue;
+            
+            await storage.addLocationMaterial({
+              locationId,
+              materialId,
+              quantity: 1,
+              daysOfWeek: null,
+            });
+            existingMaterialIds.add(materialId);
+            materialsProcessed++;
+          }
+        }
+      }
+
+      const message = materialsProcessed > 0
+        ? `Uploaded ${createdLocations.length} locations with ${materialsProcessed} material assignments`
+        : `Uploaded ${createdLocations.length} locations`;
+
       return res.status(201).json({
-        message: `Uploaded ${createdLocations.length} locations`,
+        message,
         count: createdLocations.length,
+        materialsProcessed,
       });
     } catch (error) {
       console.error("Upload locations error:", error);
@@ -1451,6 +1509,147 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete work location error:", error);
       return res.status(500).json({ message: "Failed to delete work location" });
+    }
+  });
+
+  // ============ MATERIALS ROUTES ============
+
+  // Get all materials
+  app.get("/api/materials", async (_req: Request, res: Response) => {
+    try {
+      const allMaterials = await storage.getAllMaterials();
+      return res.json(allMaterials);
+    } catch (error) {
+      console.error("Get materials error:", error);
+      return res.status(500).json({ message: "Failed to fetch materials" });
+    }
+  });
+
+  // Get single material
+  app.get("/api/materials/:id", async (req: Request, res: Response) => {
+    try {
+      const material = await storage.getMaterial(req.params.id);
+      if (!material) {
+        return res.status(404).json({ message: "Material not found" });
+      }
+      return res.json(material);
+    } catch (error) {
+      console.error("Get material error:", error);
+      return res.status(500).json({ message: "Failed to fetch material" });
+    }
+  });
+
+  // Create material
+  app.post("/api/materials", async (req: Request, res: Response) => {
+    try {
+      const parseResult = insertMaterialSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          message: parseResult.error.errors[0]?.message || "Invalid request body"
+        });
+      }
+
+      const material = await storage.createMaterial(parseResult.data);
+      return res.status(201).json(material);
+    } catch (error) {
+      console.error("Create material error:", error);
+      return res.status(500).json({ message: "Failed to create material" });
+    }
+  });
+
+  // Update material
+  app.patch("/api/materials/:id", async (req: Request, res: Response) => {
+    try {
+      const material = await storage.getMaterial(req.params.id);
+      if (!material) {
+        return res.status(404).json({ message: "Material not found" });
+      }
+
+      const { name, category } = req.body;
+      const updateData: Partial<InsertMaterial> = {};
+      if (name !== undefined) updateData.name = name;
+      if (category !== undefined) updateData.category = category;
+
+      const updated = await storage.updateMaterial(req.params.id, updateData);
+      return res.json(updated);
+    } catch (error) {
+      console.error("Update material error:", error);
+      return res.status(500).json({ message: "Failed to update material" });
+    }
+  });
+
+  // Delete material
+  app.delete("/api/materials/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteMaterial(req.params.id);
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Delete material error:", error);
+      return res.status(500).json({ message: "Failed to delete material" });
+    }
+  });
+
+  // ============ LOCATION MATERIALS ROUTES ============
+
+  // Get materials for a location
+  app.get("/api/locations/:locationId/materials", async (req: Request, res: Response) => {
+    try {
+      const locationMaterials = await storage.getLocationMaterials(req.params.locationId);
+      return res.json(locationMaterials);
+    } catch (error) {
+      console.error("Get location materials error:", error);
+      return res.status(500).json({ message: "Failed to fetch location materials" });
+    }
+  });
+
+  // Add material to location
+  app.post("/api/locations/:locationId/materials", async (req: Request, res: Response) => {
+    try {
+      const { materialId, quantity, daysOfWeek } = req.body;
+      
+      if (!materialId) {
+        return res.status(400).json({ message: "Material ID is required" });
+      }
+
+      // Check for duplicate assignment
+      const existingMaterials = await storage.getLocationMaterials(req.params.locationId);
+      const alreadyAssigned = existingMaterials.some(lm => lm.materialId === materialId);
+      if (alreadyAssigned) {
+        return res.status(409).json({ message: "Material already assigned to this location" });
+      }
+
+      const locationMaterial = await storage.addLocationMaterial({
+        locationId: req.params.locationId,
+        materialId,
+        quantity: quantity || 1,
+        daysOfWeek: daysOfWeek || null,
+      });
+      return res.status(201).json(locationMaterial);
+    } catch (error) {
+      console.error("Add location material error:", error);
+      return res.status(500).json({ message: "Failed to add material to location" });
+    }
+  });
+
+  // Remove material from location
+  app.delete("/api/location-materials/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.removeLocationMaterial(req.params.id);
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Remove location material error:", error);
+      return res.status(500).json({ message: "Failed to remove material from location" });
+    }
+  });
+
+  // Remove all materials from location
+  app.delete("/api/locations/:locationId/materials", async (req: Request, res: Response) => {
+    try {
+      await storage.removeAllLocationMaterials(req.params.locationId);
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Remove all location materials error:", error);
+      return res.status(500).json({ message: "Failed to remove materials from location" });
     }
   });
 
