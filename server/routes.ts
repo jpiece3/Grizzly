@@ -662,6 +662,23 @@ export async function registerRoutes(
   ): Promise<Route[]> {
     const createdRoutes: Route[] = [];
     
+    // Get warehouse location for start/end of routes
+    const workLocations = await storage.getAllWorkLocations();
+    const warehouse = workLocations.find(wl => wl.name.toLowerCase() === 'warehouse');
+    
+    // Create warehouse stop helper
+    const createWarehouseStop = (sequence: number, isStart: boolean): RouteStop => ({
+      id: randomUUID(),
+      locationId: warehouse?.id || 'warehouse',
+      address: warehouse?.address || '583 Frederick Road, Catonsville, MD 21228',
+      customerName: isStart ? 'Start: Warehouse' : 'End: Warehouse',
+      serviceType: undefined,
+      notes: isStart ? 'Load truck and begin route' : 'Return to warehouse',
+      lat: warehouse?.lat || 39.27257,
+      lng: warehouse?.lng || -76.7281,
+      sequence,
+    });
+
     // Check if locations have coordinates for geographic optimization
     const locationsWithCoords = dayLocations.filter(loc => loc.lat != null && loc.lng != null);
     const hasCoordinates = locationsWithCoords.length === dayLocations.length && dayLocations.length > 0;
@@ -676,8 +693,8 @@ export async function registerRoutes(
         // Apply nearest-neighbor ordering within each cluster
         const orderedLocations = nearestNeighborOrdering(cluster);
 
-        // Create route stops with optimized sequence
-        let stops: RouteStop[] = orderedLocations.map((loc, index) => ({
+        // Create route stops with optimized sequence (starting at 2, leaving room for warehouse)
+        let deliveryStops: RouteStop[] = orderedLocations.map((loc, index) => ({
           id: randomUUID(),
           locationId: loc.id,
           address: loc.address,
@@ -686,24 +703,33 @@ export async function registerRoutes(
           notes: loc.notes || undefined,
           lat: loc.lat || undefined,
           lng: loc.lng || undefined,
-          sequence: index + 1,
+          sequence: index + 2, // Start at 2, warehouse is 1
         }));
 
         // Try Google Routes API optimization for better results
         let totalDistance: number | null = null;
         let estimatedTime: number | null = null;
-        const googleResult = await optimizeRouteWithGoogle(stops);
+        const googleResult = await optimizeRouteWithGoogle(deliveryStops);
         
         if (googleResult) {
-          stops = googleResult.optimizedStops;
+          deliveryStops = googleResult.optimizedStops;
+          // Re-sequence after optimization
+          deliveryStops.forEach((stop, idx) => {
+            stop.sequence = idx + 2;
+          });
           totalDistance = googleResult.totalDistanceKm;
           estimatedTime = googleResult.estimatedTimeMinutes;
-          console.log(`Route for ${dayOfWeek} optimized with Google: ${stops.length} stops, ${totalDistance}km, ${estimatedTime} min`);
+          console.log(`Route for ${dayOfWeek} optimized with Google: ${deliveryStops.length} stops, ${totalDistance}km, ${estimatedTime} min`);
         } else {
-          totalDistance = calculateRouteDistance(stops);
-          estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (stops.length * 5) : stops.length * 15;
-          console.log(`Route for ${dayOfWeek} using nearest-neighbor: ${stops.length} stops, ${totalDistance}km (Haversine), ${estimatedTime} min est`);
+          totalDistance = calculateRouteDistance(deliveryStops);
+          estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (deliveryStops.length * 5) : deliveryStops.length * 15;
+          console.log(`Route for ${dayOfWeek} using nearest-neighbor: ${deliveryStops.length} stops, ${totalDistance}km (Haversine), ${estimatedTime} min est`);
         }
+
+        // Add warehouse at start and end
+        const warehouseStart = createWarehouseStop(1, true);
+        const warehouseEnd = createWarehouseStop(deliveryStops.length + 2, false);
+        const stops = [warehouseStart, ...deliveryStops, warehouseEnd];
 
         const mapsUrl = generateGoogleMapsUrl(stops);
 
@@ -734,7 +760,7 @@ export async function registerRoutes(
 
         const routeLocations = dayLocations.slice(startIndex, endIndex);
         
-        let stops: RouteStop[] = routeLocations.map((loc, index) => ({
+        let deliveryStops: RouteStop[] = routeLocations.map((loc, index) => ({
           id: randomUUID(),
           locationId: loc.id,
           address: loc.address,
@@ -743,26 +769,35 @@ export async function registerRoutes(
           notes: loc.notes || undefined,
           lat: loc.lat || undefined,
           lng: loc.lng || undefined,
-          sequence: index + 1,
+          sequence: index + 2, // Start at 2, warehouse is 1
         }));
 
         let totalDistance: number | null = null;
         let estimatedTime: number | null = null;
-        const stopsHaveCoords = stops.every(s => s.lat != null && s.lng != null);
+        const stopsHaveCoords = deliveryStops.every(s => s.lat != null && s.lng != null);
         
         if (stopsHaveCoords) {
-          const googleResult = await optimizeRouteWithGoogle(stops);
+          const googleResult = await optimizeRouteWithGoogle(deliveryStops);
           if (googleResult) {
-            stops = googleResult.optimizedStops;
+            deliveryStops = googleResult.optimizedStops;
+            // Re-sequence after optimization
+            deliveryStops.forEach((stop, idx) => {
+              stop.sequence = idx + 2;
+            });
             totalDistance = googleResult.totalDistanceKm;
             estimatedTime = googleResult.estimatedTimeMinutes;
           } else {
-            totalDistance = calculateRouteDistance(stops);
-            estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (stops.length * 5) : stops.length * 15;
+            totalDistance = calculateRouteDistance(deliveryStops);
+            estimatedTime = totalDistance ? Math.round((totalDistance / 40) * 60) + (deliveryStops.length * 5) : deliveryStops.length * 15;
           }
         } else {
-          estimatedTime = stops.length * 15;
+          estimatedTime = deliveryStops.length * 15;
         }
+
+        // Add warehouse at start and end
+        const warehouseStart = createWarehouseStop(1, true);
+        const warehouseEnd = createWarehouseStop(deliveryStops.length + 2, false);
+        const stops = [warehouseStart, ...deliveryStops, warehouseEnd];
 
         const mapsUrl = generateGoogleMapsUrl(stops);
 
