@@ -4,6 +4,7 @@ import { AdminLayout } from "@/components/layout/admin-layout";
 import { CSVUpload } from "@/components/upload/csv-upload";
 import { EmptyState } from "@/components/common/empty-state";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
+import { CustomerDetailDialog } from "@/components/customer/customer-detail-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,8 @@ export default function AdminStopsPage() {
   });
   const [sortField, setSortField] = useState<SortField>("customerName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
 
   // Persist state to localStorage
   const handleFilterDayChange = (day: string) => {
@@ -140,6 +143,11 @@ export default function AdminStopsPage() {
       : [...currentDays, day];
     
     updateLocationMutation.mutate({ id: location.id, daysOfWeek: newDays });
+  };
+
+  const handleCustomerClick = (location: Location) => {
+    setSelectedLocation(location);
+    setShowCustomerDialog(true);
   };
 
   const handleSort = (field: SortField) => {
@@ -402,7 +410,13 @@ export default function AdminStopsPage() {
                     <TableRow key={location.id} data-testid={`stop-row-${location.id}`}>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{location.customerName}</p>
+                          <p 
+                            className="font-medium text-primary hover:underline cursor-pointer"
+                            onClick={() => handleCustomerClick(location)}
+                            data-testid={`customer-name-${location.id}`}
+                          >
+                            {location.customerName}
+                          </p>
                           {location.serviceType && (
                             <p className="text-xs text-muted-foreground">{location.serviceType}</p>
                           )}
@@ -470,7 +484,13 @@ export default function AdminStopsPage() {
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <CardTitle className="text-base truncate">{location.customerName}</CardTitle>
+                          <CardTitle 
+                            className="text-base truncate text-primary hover:underline cursor-pointer"
+                            onClick={() => handleCustomerClick(location)}
+                            data-testid={`customer-name-${location.id}`}
+                          >
+                            {location.customerName}
+                          </CardTitle>
                           {location.serviceType && (
                             <p className="text-xs text-muted-foreground mt-0.5">{location.serviceType}</p>
                           )}
@@ -554,6 +574,15 @@ export default function AdminStopsPage() {
           )}
         </div>
       )}
+
+      <CustomerDetailDialog
+        open={showCustomerDialog}
+        onOpenChange={setShowCustomerDialog}
+        locationId={selectedLocation?.id || null}
+        customerName={selectedLocation?.customerName}
+        address={selectedLocation?.address}
+        isAdmin={true}
+      />
     </AdminLayout>
   );
 }

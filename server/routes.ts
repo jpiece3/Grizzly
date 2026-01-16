@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import { format } from "date-fns";
-import type { RouteStop, InsertLocation, InsertRoute, Location, Route } from "@shared/schema";
+import type { RouteStop, InsertLocation, InsertRoute, Location, Route, InsertMaterial } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import {
@@ -1586,6 +1586,70 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete material error:", error);
       return res.status(500).json({ message: "Failed to delete material" });
+    }
+  });
+
+  // Upload materials from CSV
+  app.post("/api/materials/upload", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const csvContent = req.file.buffer.toString("utf-8");
+      
+      let records: any[];
+      try {
+        records = parse(csvContent, {
+          columns: true,
+          skip_empty_lines: true,
+          trim: true,
+        });
+      } catch (parseError) {
+        return res.status(400).json({ message: "Invalid CSV format" });
+      }
+
+      if (records.length === 0) {
+        return res.status(400).json({ message: "CSV file is empty" });
+      }
+
+      // Validate required column
+      const firstRow = records[0];
+      if (!firstRow.name && !firstRow.Name) {
+        return res.status(400).json({ message: "CSV must have 'name' column" });
+      }
+
+      // Get existing materials to avoid duplicates
+      const existingMaterials = await storage.getAllMaterials();
+      const existingNames = new Set(existingMaterials.map(m => m.name.toLowerCase()));
+
+      let createdCount = 0;
+      let skippedCount = 0;
+
+      for (const row of records) {
+        const name = row.name || row.Name || "";
+        const category = row.category || row.Category || null;
+
+        if (!name) continue;
+
+        if (existingNames.has(name.toLowerCase())) {
+          skippedCount++;
+          continue;
+        }
+
+        await storage.createMaterial({ name, category });
+        existingNames.add(name.toLowerCase());
+        createdCount++;
+      }
+
+      return res.status(201).json({
+        message: `Created ${createdCount} materials${skippedCount > 0 ? `, skipped ${skippedCount} duplicates` : ""}`,
+        created: createdCount,
+        skipped: skippedCount,
+      });
+    } catch (error) {
+      console.error("Upload materials error:", error);
+      return res.status(500).json({ message: "Failed to upload materials" });
     }
   });
 

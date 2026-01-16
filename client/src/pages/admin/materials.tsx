@@ -17,11 +17,12 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Layers, Plus, Pencil, Trash2 } from "lucide-react";
+import { Layers, Plus, Pencil, Trash2, Upload } from "lucide-react";
 import type { Material, InsertMaterial } from "@shared/schema";
 
 export default function AdminMaterialsPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -90,6 +91,34 @@ export default function AdminMaterialsPage() {
     },
   });
 
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/materials/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Upload failed");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setShowUploadDialog(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/materials"] });
+      toast({ title: data.message || "Materials uploaded successfully" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to upload materials",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreate = () => {
     if (!formData.name) {
       toast({
@@ -137,17 +166,23 @@ export default function AdminMaterialsPage() {
     setFormData({ name: "", category: "" });
   };
 
-  const categories = [...new Set(materials.filter(m => m.category).map(m => m.category))];
+  const categories = Array.from(new Set(materials.filter(m => m.category).map(m => m.category))) as string[];
 
   return (
     <AdminLayout
       title="Materials"
       subtitle={`${materials.length} materials configured`}
       actions={
-        <Button onClick={() => setShowAddDialog(true)} data-testid="button-add-material">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Material
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowUploadDialog(true)} data-testid="button-upload-materials">
+            <Upload className="w-4 h-4 mr-2" />
+            Upload CSV
+          </Button>
+          <Button onClick={() => setShowAddDialog(true)} data-testid="button-add-material">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Material
+          </Button>
+        </div>
       }
     >
       {isLoading ? (
@@ -325,6 +360,31 @@ export default function AdminMaterialsPage() {
             >
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Materials CSV</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file with materials. Required column: name. Optional column: category.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              type="file"
+              accept=".csv"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadMutation.mutate(file);
+              }}
+              data-testid="input-materials-csv"
+            />
+            {uploadMutation.isPending && (
+              <div className="text-sm text-muted-foreground">Uploading...</div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
