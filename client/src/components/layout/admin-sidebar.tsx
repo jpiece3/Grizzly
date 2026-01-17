@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 
 const mainNavItemsDefault = [
   { id: "stops", label: "Delivery Stops", Icon: Package, href: "/admin/stops" },
-  { id: "confirm-route", label: "Confirm Route", Icon: ClipboardCheck, href: "/admin/confirm-route" },
+  { id: "confirm-route", label: "Confirm Locations", Icon: ClipboardCheck, href: "/admin/confirm-route" },
   { id: "routes", label: "Routes", Icon: Map, href: "/admin" },
   { id: "calendar", label: "Calendar", Icon: Calendar, href: "/admin/calendar" },
   { id: "materials", label: "Materials", Icon: Layers, href: "/admin/materials" },

@@ -408,11 +408,11 @@ export default function AdminRoutesPage() {
           <EmptyState
             icon={Map}
             title="No routes yet"
-            description="Go to Confirm Route to generate optimized routes from your delivery stops."
+            description="Go to Confirm Locations to generate optimized routes from your delivery stops."
             action={
               <Button onClick={() => navigate("/admin/confirm-route")} data-testid="button-go-to-confirm">
                 <Plus className="w-4 h-4 mr-2" />
-                Go to Confirm Route
+                Go to Confirm Locations
               </Button>
             }
           />

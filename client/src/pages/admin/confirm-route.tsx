@@ -27,7 +27,8 @@ import {
   CheckCircle2,
   XCircle,
   Building2,
-  Plus
+  Plus,
+  Wrench
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import type { Location, RouteConfirmation, Route } from "@shared/schema";
@@ -175,7 +176,7 @@ export default function AdminConfirmRoutePage() {
 
   return (
     <AdminLayout
-      title="Confirm Route"
+      title="Confirm Locations"
       subtitle={`Review and confirm stops for ${format(selectedDate, "EEEE, MMMM d, yyyy")}`}
       actions={
         <div className="flex items-center gap-2">
@@ -191,6 +192,20 @@ export default function AdminConfirmRoutePage() {
             data-testid="button-save-confirmations"
           >
             {saveMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (hasUnsavedChanges) {
+                saveMutation.mutate();
+              }
+              navigate(`/admin/build-routes?date=${formattedDate}&day=${dayOfWeek}`);
+            }}
+            disabled={saveMutation.isPending || includedCount === 0}
+            data-testid="button-build-manually"
+          >
+            <Wrench className="w-4 h-4 mr-2" />
+            Build Manually
           </Button>
           <Button
             onClick={() => setShowGenerateDialog(true)}
@@ -382,19 +397,35 @@ export default function AdminConfirmRoutePage() {
                       )}
                     </p>
                   </div>
-                  <Button
-                    onClick={() => {
-                      if (hasUnsavedChanges) {
-                        saveMutation.mutate();
-                      }
-                      setShowGenerateDialog(true);
-                    }}
-                    disabled={saveMutation.isPending || includedCount === 0}
-                    data-testid="button-save-and-generate"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    {hasUnsavedChanges ? "Save & " : ""}Generate Routes
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (hasUnsavedChanges) {
+                          saveMutation.mutate();
+                        }
+                        navigate(`/admin/build-routes?date=${formattedDate}&day=${dayOfWeek}`);
+                      }}
+                      disabled={saveMutation.isPending || includedCount === 0}
+                      data-testid="button-save-and-build"
+                    >
+                      <Wrench className="w-4 h-4 mr-2" />
+                      {hasUnsavedChanges ? "Save & " : ""}Build Manually
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (hasUnsavedChanges) {
+                          saveMutation.mutate();
+                        }
+                        setShowGenerateDialog(true);
+                      }}
+                      disabled={saveMutation.isPending || includedCount === 0}
+                      data-testid="button-save-and-generate"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      {hasUnsavedChanges ? "Save & " : ""}Generate Routes
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

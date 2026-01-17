@@ -65,6 +65,29 @@ const routeConfirmationSchema = z.object({
   excluded: z.boolean(),
 });
 
+const manualRouteStopSchema = z.object({
+  id: z.string(),
+  locationId: z.string(),
+  address: z.string(),
+  customerName: z.string(),
+  serviceType: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  lat: z.number().optional().nullable(),
+  lng: z.number().optional().nullable(),
+  sequence: z.number(),
+});
+
+const manualRouteSchema = z.object({
+  dayOfWeek: z.string().min(1, "Day of week is required"),
+  scheduledDate: z.string().min(1, "Scheduled date is required"),
+  driverIndex: z.number(),
+  stops: z.array(manualRouteStopSchema).min(1, "At least one stop is required"),
+});
+
+const createManualRoutesSchema = z.object({
+  routes: z.array(manualRouteSchema).min(1, "At least one route is required"),
+});
+
 const bulkRouteConfirmationSchema = z.object({
   scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
   confirmations: z.array(z.object({
@@ -1010,6 +1033,98 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Generate routes error:", error);
       return res.status(500).json({ message: "Failed to generate routes" });
+    }
+  });
+
+  // Manual route creation endpoint
+  app.post("/api/routes/create-manual", async (req: Request, res: Response) => {
+    try {
+      const validation = createManualRoutesSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        const errors = validation.error.flatten();
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.fieldErrors,
+        });
+      }
+
+      const { routes: routeData } = validation.data;
+      const createdRoutes: Route[] = [];
+      
+      // Get warehouse location for start/end of routes
+      const workLocations = await storage.getAllWorkLocations();
+      const warehouse = workLocations.find(wl => wl.name.toLowerCase() === 'warehouse');
+      
+      // Create warehouse stop helper
+      const createWarehouseStop = (sequence: number, isStart: boolean): RouteStop => ({
+        id: randomUUID(),
+        locationId: warehouse?.id || 'warehouse',
+        address: warehouse?.address || '3700 Pennington Ave Baltimore, MD 21226',
+        customerName: isStart ? 'Start: Warehouse' : 'End: Warehouse',
+        serviceType: undefined,
+        notes: undefined,
+        lat: warehouse?.lat,
+        lng: warehouse?.lng,
+        sequence,
+      });
+
+      for (const routeInfo of routeData) {
+        const { dayOfWeek, scheduledDate, stops } = routeInfo;
+
+        // Re-sequence stops and add warehouse at start/end
+        const warehouseStart = createWarehouseStop(1, true);
+        const deliveryStops = stops.map((stop, idx: number) => ({
+          ...stop,
+          serviceType: stop.serviceType ?? undefined,
+          notes: stop.notes ?? undefined,
+          lat: stop.lat ?? undefined,
+          lng: stop.lng ?? undefined,
+          sequence: idx + 2, // Start at 2 (after warehouse start)
+        }));
+        const warehouseEnd = createWarehouseStop(deliveryStops.length + 2, false);
+        const allStops: RouteStop[] = [warehouseStart, ...deliveryStops, warehouseEnd];
+
+        // Calculate distance if stops have coordinates
+        const stopsHaveCoords = allStops.every((s: RouteStop) => s.lat != null && s.lng != null);
+        let totalDistance: number | undefined;
+        let estimatedTime: number | undefined;
+
+        if (stopsHaveCoords) {
+          totalDistance = calculateRouteDistance(allStops);
+          estimatedTime = totalDistance 
+            ? Math.round((totalDistance / 40) * 60) + (deliveryStops.length * 5) 
+            : deliveryStops.length * 15;
+        } else {
+          estimatedTime = deliveryStops.length * 15;
+        }
+
+        const mapsUrl = generateGoogleMapsUrl(allStops);
+
+        const route = await storage.createRoute({
+          date: scheduledDate,
+          dayOfWeek: dayOfWeek,
+          stopsJson: allStops,
+          routeLink: mapsUrl,
+          totalDistance,
+          estimatedTime,
+          status: "draft",
+          stopCount: allStops.length,
+          driverId: null,
+          driverName: null,
+        });
+
+        createdRoutes.push(route);
+      }
+
+      if (createdRoutes.length === 0) {
+        return res.status(400).json({ message: "No routes were created - all routes had no stops" });
+      }
+
+      return res.status(201).json(createdRoutes);
+    } catch (error) {
+      console.error("Manual route creation error:", error);
+      return res.status(500).json({ message: "Failed to create routes" });
     }
   });
 

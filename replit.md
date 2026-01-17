@@ -47,10 +47,11 @@ UI preferences persist across navigation using localStorage:
    - Locations can be assigned to multiple days (e.g., Tuesday AND Friday)
    - Search and filter delivery stops
 
-2. **Confirm Route** (Route Generation Workflow)
+2. **Confirm Locations** (Route Generation Workflow)
    - Select a date and review stops scheduled for that day
    - Toggle individual stops to include/exclude from route generation
-   - **Generate Routes** button opens dialog to create optimized routes
+   - **Generate Routes** button opens dialog to auto-create optimized routes
+   - **Build Manually** button to manually assign locations to driver routes
    - Auto-generate optimized routes using K-means clustering + nearest-neighbor algorithm
    - Google Routes API integration for optimal waypoint ordering
    - **Routes automatically start and end at the Warehouse** (configured in Work Locations)
