@@ -1,4 +1,4 @@
-# Grizzly Mats Driver Management App - Design Guidelines
+# RouteSimply - Design Guidelines
 
 ## Design Approach
 

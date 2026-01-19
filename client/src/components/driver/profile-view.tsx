@@ -61,7 +61,7 @@ export function DriverProfileView() {
       </Button>
 
       <p className="text-xs text-center text-muted-foreground">
-        Grizzly Mats Driver Management v1.0
+        RouteSimply v1.0
       </p>
     </div>
   );

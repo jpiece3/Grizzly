@@ -1,7 +1,7 @@
-# Grizzly Mats Driver Management App
+# RouteSimply
 
 ## Overview
-A mobile-optimized web application for managing mat delivery driver schedules, GPS-verified time tracking, and route optimization. Built with a Light Glass UI (glassmorphism) design aesthetic featuring frosted glass effects, purple/cyan gradient accents, and premium visual styling.
+A mobile-optimized web application for managing delivery driver schedules, GPS-verified time tracking, and route optimization. Built with a Light Glass UI (glassmorphism) design aesthetic featuring frosted glass effects, purple/cyan gradient accents, and premium visual styling.
 
 ## Demo Credentials
 - **Admin**: username: `admin`, password: `admin123`

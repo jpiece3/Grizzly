@@ -2184,7 +2184,7 @@ ${(() => {
 })()}
 `;
 
-      const systemPrompt = `You are a helpful AI assistant for the Grizzly Mats Driver Management App. You help administrators understand how to use the app and answer questions about their data.
+      const systemPrompt = `You are a helpful AI assistant for RouteSimply. You help administrators understand how to use the app and answer questions about their data.
 
 ## Your Capabilities:
 1. Answer "how to" questions using the app documentation

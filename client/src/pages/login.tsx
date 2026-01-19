@@ -80,10 +80,10 @@ export default function LoginPage() {
             <Truck className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            Grizzly Mats
+            RouteSimply
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Driver Management System
+            Route Management System
           </p>
         </div>
 

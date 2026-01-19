@@ -1,7 +1,7 @@
-# Grizzly Mats Driver Management App - User Guide
+# RouteSimply - User Guide
 
 ## Overview
-This app helps you manage mat delivery drivers, create optimized routes, and track driver time. It's designed for both admin users (who manage everything) and drivers (who view their routes and clock in/out).
+This app helps you manage delivery drivers, create optimized routes, and track driver time. It's designed for both admin users (who manage everything) and drivers (who view their routes and clock in/out).
 
 ---
 

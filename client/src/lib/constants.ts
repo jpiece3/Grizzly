@@ -1,5 +1,5 @@
 // App constants
-export const APP_NAME = "Grizzly Mats";
+export const APP_NAME = "RouteSimply";
 export const GEOFENCE_RADIUS_METERS = 100;
 
 // Route status labels
