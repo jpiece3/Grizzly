@@ -433,10 +433,10 @@ export default function AdminStopsPage() {
                               <button
                                 key={day.value}
                                 onClick={() => handleDayToggle(location, day.value)}
-                                className={`w-9 h-9 rounded-lg text-xs font-medium transition-all ${
+                                className={`w-9 h-9 rounded-lg text-xs font-medium transition-all duration-150 transform active:scale-90 hover-elevate ${
                                   isSelected
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                    ? "bg-gradient-to-br from-primary to-[hsl(220,80%,55%)] text-primary-foreground shadow-md ring-2 ring-primary/30"
+                                    : "bg-muted text-muted-foreground"
                                 }`}
                                 data-testid={`day-toggle-${location.id}-${day.value}`}
                                 title={day.fullLabel}
@@ -518,10 +518,10 @@ export default function AdminStopsPage() {
                             <button
                               key={day.value}
                               onClick={() => handleDayToggle(location, day.value)}
-                              className={`relative w-10 h-10 rounded-lg text-xs font-medium transition-all flex items-center justify-center ${
+                              className={`relative w-10 h-10 rounded-lg text-xs font-medium transition-all duration-150 transform active:scale-90 hover-elevate flex items-center justify-center ${
                                 isSelected
-                                  ? "bg-primary text-primary-foreground shadow-sm"
-                                  : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent hover:border-primary/20"
+                                  ? "bg-gradient-to-br from-primary to-[hsl(220,80%,55%)] text-primary-foreground shadow-md ring-2 ring-primary/30"
+                                  : "bg-muted text-muted-foreground border border-transparent"
                               }`}
                               data-testid={`day-toggle-${location.id}-${day.value}`}
                               title={isSelected ? `Remove from ${day.fullLabel}` : `Add to ${day.fullLabel}`}
