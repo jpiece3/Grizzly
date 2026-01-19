@@ -19,7 +19,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Truck } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import logoUrl from "@assets/Untitled_design_(2)_1768856385164.png";
 import type { User } from "@shared/schema";
 
 const loginSchema = z.object({
@@ -76,13 +77,12 @@ export default function LoginPage() {
       </div>
       <Card className="w-full max-w-md p-8 relative z-10 shadow-xl">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-[hsl(186,80%,45%)] flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Truck className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            RouteSimply
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <img 
+            src={logoUrl} 
+            alt="RouteSimply" 
+            className="h-14 mx-auto mb-3"
+          />
+          <p className="text-sm text-muted-foreground">
             Route Management System
           </p>
         </div>

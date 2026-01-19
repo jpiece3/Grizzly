@@ -21,6 +21,7 @@ import { Map, Users, Clock, MapPin, LogOut, Package, Calendar, ClipboardCheck, L
 import { cn } from "@/lib/utils";
 import { useAuthContext } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
+import logoUrl from "@assets/Untitled_design_(2)_1768856385164.png";
 
 const mainNavItemsDefault = [
   { id: "stops", label: "Delivery Stops", Icon: Package, href: "/admin/stops" },
@@ -150,11 +151,12 @@ export function AdminSidebar() {
 
   return (
     <aside className="w-[280px] h-screen bg-white/70 dark:bg-white/5 backdrop-blur-xl border-r border-white/30 dark:border-white/10 flex flex-col">
-      <div className="p-6 border-b border-white/20 dark:border-white/10">
-        <h1 className="text-xl font-bold text-sidebar-foreground tracking-tight">
-          RouteSimply
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Route Management</p>
+      <div className="p-5 border-b border-white/20 dark:border-white/10">
+        <img 
+          src={logoUrl} 
+          alt="RouteSimply" 
+          className="h-10"
+        />
       </div>
 
       <nav className="flex-1 p-4 overflow-y-auto">
