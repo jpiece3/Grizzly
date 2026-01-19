@@ -40,7 +40,7 @@ export function AIChat() {
   });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -60,11 +60,12 @@ export function AIChat() {
     }
   }, [messages]);
 
+  // Auto-scroll to bottom when messages change or loading state changes
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollEndRef.current) {
+      scrollEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -266,7 +267,7 @@ export function AIChat() {
             </div>
           </div>
 
-          <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+          <ScrollArea className="flex-1 p-4">
             {messages.length === 0 && (
               <div className="text-center py-6 animate-fade-in">
                 <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 flex items-center justify-center">
@@ -392,6 +393,7 @@ export function AIChat() {
                   </div>
                 </div>
               )}
+              <div ref={scrollEndRef} />
             </div>
           </ScrollArea>
 
