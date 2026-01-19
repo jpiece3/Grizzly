@@ -60,7 +60,7 @@ export function RouteCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-3 flex-wrap">
             <Badge
-              className={cn("text-xs font-medium", statusColors[route.status as keyof typeof statusColors] || statusColors.draft)}
+              className="whitespace-nowrap inline-flex items-center rounded-md border px-2.5 py-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 hover-elevate border-transparent from-primary to-[hsl(220,80%,55%)] shadow-sm text-xs font-medium bg-muted text-[#fcfcff]"
             >
               {route.status === "draft" && "Draft"}
               {route.status === "assigned" && "Assigned"}
